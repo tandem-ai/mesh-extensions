@@ -2,10 +2,11 @@
 //! used to be `mesh-agents/src/install/cursor.rs` and the Cursor parts of
 //! `hooks.rs` in mesh itself; it writes the same files, byte for byte.
 //!
-//! - install: hooks in `<config dir>/hooks.json` and the MCP server in
-//!   `<config dir>/mcp.json` (`~/.cursor` by default). Both the editor and
-//!   `cursor-agent` read them. The CLI's allow list (`cli-config.json`) gets
-//!   `Mcp(mesh:*)` so the agent can use mesh's tools without asking each time;
+//! - install: hooks in `<config dir>/hooks.json` and the MCP servers `mesh`
+//!   and `mesh-ext` (extension tools) in `<config dir>/mcp.json` (`~/.cursor`
+//!   by default). Both the editor and `cursor-agent` read them. The CLI's
+//!   allow list (`cli-config.json`) gets `Mcp(mesh:*)` so the agent can use
+//!   mesh's tools without asking each time; extension tools are asked about;
 //! - hooks: which session event each Cursor hook is, and what it prints.
 //!
 //! Hooks are flat lists: `{"version": 1, "hooks": {"stop": [{command, timeout}]}}`.
@@ -114,7 +115,8 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
     }
     report.notes.push(
         "Cursor: hooks (sessionStart, postToolUse, stop, sessionEnd) and the `mesh` \
-         MCP server are set for the editor and the CLI; new chats pick them up."
+         and `mesh-ext` MCP servers are set for the editor and the CLI; new chats \
+         pick them up."
             .into(),
     );
     Ok(report)
@@ -191,12 +193,15 @@ fn remove_hooks(root: &mut Value) {
     }
 }
 
-/// Our MCP server in `mcp.json`.
+/// Our MCP servers in `mcp.json`.
 fn add_mcp(root: &mut Value, req: &InstallRequest) -> Result<()> {
-    json::object_at(root, "mcpServers")?.insert(
-        "mesh".into(),
-        json::mcp_entry(req, &[("type", Value::String("stdio".into()))]),
-    );
+    let servers = json::object_at(root, "mcpServers")?;
+    for (name, args, _) in json::MCP_SERVERS {
+        servers.insert(
+            name.to_string(),
+            json::mcp_entry(req, args, &[("type", Value::String("stdio".into()))]),
+        );
+    }
     Ok(())
 }
 
@@ -319,16 +324,26 @@ mod tests {
         remove_hooks(&mut h);
         assert_eq!(h, theirs);
 
-        let mut m = json!({});
+        let mut m = json!({"mcpServers": {"gh": {"command": "gh-mcp"}}});
         add_mcp(&mut m, &opts()).unwrap();
         assert_eq!(
             m,
-            json!({"mcpServers": {"mesh": {"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp"]}}})
+            json!({"mcpServers": {
+                "gh": {"command": "gh-mcp"},
+                "mesh": {"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp"]},
+                "mesh-ext": {"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp", "--ext"]},
+            }})
         );
+        let once = m.clone();
+        add_mcp(&mut m, &opts()).unwrap();
+        assert_eq!(m, once, "idempotent");
+        assert!(json::remove_mcp(&mut m));
+        assert_eq!(m, json!({"mcpServers": {"gh": {"command": "gh-mcp"}}}));
 
         let mut c = json!({});
         add_permission(&mut c, "/c/cli-config.json").unwrap();
         add_permission(&mut c, "/c/cli-config.json").unwrap();
+        // Not `Mcp(mesh-ext:*)`: extension tools are asked about.
         assert_eq!(c["permissions"]["allow"], json!(["Mcp(mesh:*)"]));
         remove_permission(&mut c);
         assert_eq!(c, json!({"permissions": {"allow": []}}));

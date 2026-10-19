@@ -1,9 +1,9 @@
 id = "mesh/codex"
-version = "0.1.0"
+version = "0.2.0"
 api = "1.1"
 kind = "provider"
 scope = "personal"
-description = "Connects Codex to mesh: trusted hooks and the mesh MCP server."
+description = "Connects Codex to mesh: trusted hooks and the mesh and mesh-ext MCP servers."
 
 [provider]
 agent = "codex"

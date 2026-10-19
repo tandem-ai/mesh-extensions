@@ -2,13 +2,15 @@
 //! `mesh-agents/src/install/gemini.rs` and the Gemini parts of `hooks.rs` in
 //! mesh itself; it writes the same files, byte for byte.
 //!
-//! - install: hooks and the MCP server in `<config dir>/settings.json`
-//!   (`~/.gemini`, or `$GEMINI_CLI_HOME/.gemini`);
+//! - install: hooks and the MCP servers `mesh` and `mesh-ext` (extension
+//!   tools) in `<config dir>/settings.json` (`~/.gemini`, or
+//!   `$GEMINI_CLI_HOME/.gemini`);
 //! - hooks: which session event each Gemini hook is, and what it prints.
 //!
 //! Docs: <https://github.com/google-gemini/gemini-cli/blob/main/docs/hooks/reference.md>,
 //! <https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md>.
-//! Hook timeouts are in milliseconds; `trust: true` skips tool confirmations.
+//! Hook timeouts are in milliseconds; `trust: true` skips tool confirmations
+//! (on `mesh` only: extension tools are asked about on first use).
 
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code, unused_imports))]
 
@@ -92,7 +94,7 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
     }
     report.notes.push(
         "Gemini CLI: hooks (SessionStart, BeforeAgent, AfterAgent, SessionEnd, AfterTool) and the \
-         `mesh` MCP server are set; restart Gemini to load them."
+         `mesh` and `mesh-ext` MCP servers are set; restart Gemini to load them."
             .into(),
     );
     Ok(report)
@@ -112,7 +114,7 @@ fn uninstall(req: &InstallRequest) -> Result<InstallResult> {
     Ok(report)
 }
 
-/// Our hooks and MCP server, merged into `settings.json`.
+/// Our hooks and MCP servers, merged into `settings.json`.
 fn add(settings: &mut Value, req: &InstallRequest) -> Result<()> {
     {
         let hooks = json::object_at(settings, "hooks")?;
@@ -127,14 +129,19 @@ fn add(settings: &mut Value, req: &InstallRequest) -> Result<()> {
         }
         json::remove_old_hooks(hooks, OLD_EVENTS, "gemini");
     }
-    json::object_at(settings, "mcpServers")?.insert(
-        "mesh".into(),
-        json::mcp_entry(req, &[("trust", Value::Bool(true))]),
-    );
+    let servers = json::object_at(settings, "mcpServers")?;
+    for (name, args, trusted) in json::MCP_SERVERS {
+        let extra = if *trusted {
+            vec![("trust", Value::Bool(true))]
+        } else {
+            vec![]
+        };
+        servers.insert(name.to_string(), json::mcp_entry(req, args, &extra));
+    }
     Ok(())
 }
 
-/// Our hooks (every event) and MCP server, gone from `settings.json`.
+/// Our hooks (every event) and MCP servers, gone from `settings.json`.
 fn remove(settings: &mut Value) {
     json::remove_hooks(settings, "gemini");
     json::remove_mcp(settings);
@@ -240,6 +247,11 @@ mod tests {
             s["mcpServers"]["mesh"],
             json!({"command": "/usr/local/bin/mesh", "args": ["mcp"], "trust": true})
         );
+        // Extension tools are asked about: no `trust`.
+        assert_eq!(
+            s["mcpServers"]["mesh-ext"],
+            json!({"command": "/usr/local/bin/mesh", "args": ["mcp", "--ext"]})
+        );
         assert_eq!(s["mcpServers"]["gh"]["command"], "gh-mcp");
 
         let once = s.clone();
@@ -247,6 +259,28 @@ mod tests {
         assert_eq!(s, once, "idempotent");
         remove(&mut s);
         assert_eq!(s, original);
+    }
+
+    #[test]
+    fn mesh_ext_follows_the_mesh_binary() {
+        let mut r = opts();
+        r.mesh_home = Some("/tmp/h".into());
+        let mut s = json!({"mcpServers": {
+            "mesh-ext": {"command": "/old/mesh", "args": ["mcp", "--ext"]},
+            "ext": {"command": "/bin/other"},
+        }});
+        add(&mut s, &r).unwrap();
+        assert_eq!(
+            s["mcpServers"]["mesh-ext"],
+            json!({"command": "/usr/local/bin/mesh", "args": ["mcp", "--ext"], "env": {"MESH_HOME": "/tmp/h"}})
+        );
+        remove(&mut s);
+        assert_eq!(s["mcpServers"], json!({"ext": {"command": "/bin/other"}}));
+        // Someone else's `mesh-ext` server stays.
+        let mut theirs = json!({"mcpServers": {"mesh-ext": {"command": "/bin/meshy"}}});
+        let before = theirs.clone();
+        remove(&mut theirs);
+        assert_eq!(theirs, before);
     }
 
     /// An older mesh hooked `BeforeTool` (team rules).

@@ -7,10 +7,10 @@ the mesh repo (decisions E1–E27).
 | Path | What |
 |---|---|
 | `sdk/rust` | `mesh-ext`, the Rust SDK: host API 1.1 types and calls, over Extism |
-| `providers/claude-code` | `mesh/claude-code`: connects Claude Code to mesh (hooks, MCP server, permissions) |
-| `providers/codex` | `mesh/codex`: Codex (hooks and their trust, the MCP server, in `config.toml`) |
-| `providers/gemini` | `mesh/gemini`: Gemini CLI (hooks and the MCP server, in `settings.json`) |
-| `providers/cursor` | `mesh/cursor`: Cursor (hooks, the MCP server, CLI permissions) |
+| `providers/claude-code` | `mesh/claude-code`: connects Claude Code to mesh (hooks, the `mesh` and `mesh-ext` MCP servers, permissions) |
+| `providers/codex` | `mesh/codex`: Codex (hooks and their trust, the `mesh` and `mesh-ext` MCP servers, in `config.toml`) |
+| `providers/gemini` | `mesh/gemini`: Gemini CLI (hooks and the `mesh` and `mesh-ext` MCP servers, in `settings.json`) |
+| `providers/cursor` | `mesh/cursor`: Cursor (hooks, the `mesh` and `mesh-ext` MCP servers, CLI permissions) |
 | `providers/pi` | `mesh/pi`: Pi (a TypeScript extension) |
 | `providers/hermes` | `mesh/hermes`: Hermes (a Python plugin, enabled with `hermes plugins`) |
 | `scripts/build.sh` | builds an extension to WASM and packs it into a `.meshext` |

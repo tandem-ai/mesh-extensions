@@ -2,7 +2,8 @@
 //! `mesh-agents/src/install/codex.rs` and the Codex parts of `hooks.rs` in
 //! mesh itself; it writes the same files, byte for byte.
 //!
-//! - install: hooks and the MCP server in `$CODEX_HOME/config.toml` (default
+//! - install: hooks and the MCP servers `mesh` and `mesh-ext` (extension
+//!   tools, asked about on first use) in `$CODEX_HOME/config.toml` (default
 //!   `~/.codex`), edited with `toml_edit` so the user's comments and layout
 //!   stay;
 //! - hooks: which session event each Codex hook is, and what it prints.
@@ -12,6 +13,10 @@
 //! command = "/…/mesh"
 //! args = ["mcp"]
 //! default_tools_approval_mode = "approve"
+//!
+//! [mcp_servers.mesh-ext]
+//! command = "/…/mesh"
+//! args = ["mcp", "--ext"]
 //!
 //! [[hooks.Stop]]
 //! [[hooks.Stop.hooks]]
@@ -190,8 +195,8 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
     }
     report.notes.push(
         "Codex: hooks (SessionStart, UserPromptSubmit, Stop, Interrupt, SessionEnd, \
-         PostToolUse, PermissionRequest) and the `mesh` MCP \
-         server are set, and the hooks are marked trusted; new sessions pick them up."
+         PostToolUse, PermissionRequest) and the `mesh` and `mesh-ext` MCP \
+         servers are set, and the hooks are marked trusted; new sessions pick them up."
             .into(),
     );
     Ok(report)
@@ -201,32 +206,35 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
 fn install_doc(doc: &mut DocumentMut, req: &InstallRequest, path: &str, src: &str) -> Result<()> {
     let root = doc.as_table_mut();
 
-    // MCP server.
+    // MCP servers.
     {
         let servers = table_at(root, "mcp_servers")?;
-        let mut mesh = Table::new();
-        mesh.insert("command", value(req.mesh_bin.clone()));
-        let mut args = toml_edit::Array::new();
-        args.push("mcp");
-        mesh.insert("args", value(args));
-        if let Some(home) = &req.mesh_home {
-            let mut env = InlineTable::new();
-            env.insert("MESH_HOME", home.clone().into());
-            mesh.insert("env", value(env));
-        }
-        mesh.insert("default_tools_approval_mode", value("approve"));
-        match servers.get_mut("mesh").and_then(Item::as_table_mut) {
-            // Keep the table where it is (and any keys the user added).
-            Some(existing) => {
-                if req.mesh_home.is_none() {
-                    existing.remove("env");
-                }
-                for (k, v) in mesh.iter() {
-                    existing.insert(k, v.clone());
-                }
+        for (name, args, trusted) in config::MCP_SERVERS {
+            let mut mesh = Table::new();
+            mesh.insert("command", value(req.mesh_bin.clone()));
+            let args: toml_edit::Array = args.iter().copied().collect();
+            mesh.insert("args", value(args));
+            if let Some(home) = &req.mesh_home {
+                let mut env = InlineTable::new();
+                env.insert("MESH_HOME", home.clone().into());
+                mesh.insert("env", value(env));
             }
-            None => {
-                servers.insert("mesh", Item::Table(mesh));
+            if *trusted {
+                mesh.insert("default_tools_approval_mode", value("approve"));
+            }
+            match servers.get_mut(name).and_then(Item::as_table_mut) {
+                // Keep the table where it is (and any keys the user added).
+                Some(existing) => {
+                    if req.mesh_home.is_none() {
+                        existing.remove("env");
+                    }
+                    for (k, v) in mesh.iter() {
+                        existing.insert(k, v.clone());
+                    }
+                }
+                None => {
+                    servers.insert(name, Item::Table(mesh));
+                }
             }
         }
     }
@@ -324,13 +332,15 @@ fn uninstall_doc(doc: &mut DocumentMut, src: &str) {
         .get_mut("mcp_servers")
         .and_then(Item::as_table_like_mut)
     {
-        let ours = servers
-            .get("mesh")
-            .and_then(|m| m.get("command"))
-            .and_then(Item::as_str)
-            .is_some_and(|c| c.rsplit('/').next() == Some("mesh"));
-        if ours {
-            servers.remove("mesh");
+        for (name, ..) in config::MCP_SERVERS {
+            let ours = servers
+                .get(name)
+                .and_then(|m| m.get("command"))
+                .and_then(Item::as_str)
+                .is_some_and(|c| c.rsplit('/').next() == Some("mesh"));
+            if ours {
+                servers.remove(name);
+            }
         }
         if servers.is_empty() {
             root.remove("mcp_servers");
@@ -564,9 +574,12 @@ mod tests {
     fn install_writes_hooks_trust_and_mcp() {
         let r = req(Some("/tmp/h"));
         let out = installed("", &r);
+        // Extension tools are asked about: no approval mode on `mesh-ext`.
         assert!(out.starts_with(
             "[mcp_servers.mesh]\ncommand = \"/a b/mesh\"\nargs = [\"mcp\"]\n\
-             env = { MESH_HOME = \"/tmp/h\" }\ndefault_tools_approval_mode = \"approve\"\n"
+             env = { MESH_HOME = \"/tmp/h\" }\ndefault_tools_approval_mode = \"approve\"\n\n\
+             [mcp_servers.mesh-ext]\ncommand = \"/a b/mesh\"\nargs = [\"mcp\", \"--ext\"]\n\
+             env = { MESH_HOME = \"/tmp/h\" }\n\n"
         ));
         assert!(out.contains(
             "[[hooks.Stop]]\n\n[[hooks.Stop.hooks]]\ntype = \"command\"\n\
@@ -589,6 +602,7 @@ mod tests {
         let before = "# mine\nmodel = \"o3\"\n\n\
             [mcp_servers.mesh]\ncommand = \"/old/mesh\"\nargs = [\"mcp\"]\n\
             env = { MESH_HOME = \"/old\" }\nstartup_timeout_sec = 20\n\n\
+            [mcp_servers.mesh-ext]\ncommand = \"/old/mesh\"\nargs = [\"mcp\", \"--ext\"]\n\n\
             [[hooks.PreToolUse]]\n[[hooks.PreToolUse.hooks]]\ntype = \"command\"\n\
             command = \"mesh hook codex tool\"\n\n\
             [[hooks.PreToolUse]]\n[[hooks.PreToolUse.hooks]]\ntype = \"command\"\n\
@@ -601,8 +615,10 @@ mod tests {
         // Our table stays where it was, with the user's key; no env without a home.
         assert!(out.contains(
             "[mcp_servers.mesh]\ncommand = \"/a b/mesh\"\nargs = [\"mcp\"]\n\
-             startup_timeout_sec = 20\ndefault_tools_approval_mode = \"approve\"\n"
+             startup_timeout_sec = 20\ndefault_tools_approval_mode = \"approve\"\n\n\
+             [mcp_servers.mesh-ext]\ncommand = \"/a b/mesh\"\nargs = [\"mcp\", \"--ext\"]\n\n"
         ));
+        assert!(!out.contains("/old/mesh"));
         assert!(!out.contains("hook codex tool"));
         assert!(out.contains("command = \"lint\""));
         // The user's PreToolUse group moved to 0, and keeps its trust.
@@ -623,8 +639,12 @@ mod tests {
         assert_eq!(uninstalled(&with_ours), user);
         assert_eq!(uninstalled(&installed("", &req(None))), "");
         // Someone else's `mesh` server stays.
-        let theirs = "[mcp_servers.mesh]\ncommand = \"/bin/meshy\"\n";
+        let theirs = "[mcp_servers.mesh]\ncommand = \"/bin/meshy\"\n\n\
+            [mcp_servers.mesh-ext]\ncommand = \"/bin/meshy\"\n";
         assert_eq!(uninstalled(theirs), theirs);
+        let installed = installed(theirs, &req(None));
+        assert!(installed.contains("args = [\"mcp\", \"--ext\"]"));
+        assert!(!uninstalled(&installed).contains("mcp_servers"));
     }
 
     #[test]

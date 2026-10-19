@@ -3,9 +3,11 @@
 //! `hooks.rs` in mesh itself; it writes the same files, byte for byte.
 //!
 //! - install: hooks and permissions in `<config dir>/settings.json`, the MCP
-//!   server in the user-scope `mcpServers` of `.claude.json` (through
-//!   `claude mcp …` when no config dir is given and `claude` is on PATH:
-//!   a running Claude rewrites that file all the time);
+//!   servers `mesh` and `mesh-ext` (extension tools) in the user-scope
+//!   `mcpServers` of `.claude.json` (through `claude mcp …` when no config
+//!   dir is given and `claude` is on PATH: a running Claude rewrites that
+//!   file all the time). Only `mesh`'s tools are allowed without asking;
+//!   extension tools are asked about on first use;
 //! - hooks: which session event each Claude hook is, and what it prints.
 //!
 //! Docs: <https://code.claude.com/docs/en/hooks>, <https://code.claude.com/docs/en/mcp>.
@@ -42,7 +44,7 @@ const EVENTS: &[(&str, &str, u64, Option<&str>)] = &[
 const OLD_EVENTS: &[&str] = &["PreToolUse"];
 
 /// What a session may run without asking: the agent-facing commands only and
-/// mesh's MCP tools.
+/// mesh's MCP tools (not `mcp__mesh-ext__*`: extension tools are asked about).
 const PERMISSIONS: &[&str] = &[
     "Bash(mesh send:*)",
     "Bash(mesh inbox:*)",
@@ -178,23 +180,18 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
         report.files.push(f.settings.clone());
     }
 
-    let entry = json::mcp_entry(req, &[("type", Value::String("stdio".into()))]);
     if via_cli(req)? {
         // Only read the file, to skip the CLI when nothing changes.
-        let current = json::read(&f.claude_json)
-            .ok()
-            .and_then(|cj| cj.get("mcpServers")?.get("mesh").cloned());
-        if current.as_ref() != Some(&entry) {
-            if current.is_some() {
-                run_claude(&["mcp", "remove", "--scope", "user", "mesh"])?;
-            }
-            let entry = entry.to_string();
-            run_claude(&["mcp", "add-json", "--scope", "user", "mesh", &entry])?;
+        let calls = cli_installs(json::read(&f.claude_json).ok().as_ref(), req);
+        for args in &calls {
+            run_claude(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+        }
+        if !calls.is_empty() {
             report.files.push(f.claude_json.clone());
         }
     } else {
         let mut cj = json::read(&f.claude_json)?;
-        json::object_at(&mut cj, "mcpServers")?.insert("mesh".into(), entry);
+        add_mcp(&mut cj, req)?;
         if json::write(&f.claude_json, &cj)? {
             report.files.push(f.claude_json.clone());
         }
@@ -202,10 +199,53 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
     report.notes.push(
         "Claude Code: hooks (SessionStart, UserPromptSubmit, Stop, Notification, \
          PermissionRequest, SessionEnd), \
-         permissions and the `mesh` MCP server are set; new sessions pick them up."
+         permissions and the `mesh` and `mesh-ext` MCP servers are set; new sessions \
+         pick them up."
             .into(),
     );
     Ok(report)
+}
+
+/// Our MCP servers as `.claude.json` holds them.
+fn mcp_entries(req: &InstallRequest) -> Vec<(&'static str, Value)> {
+    json::MCP_SERVERS
+        .iter()
+        .map(|(name, args, _)| {
+            let extra = [("type", Value::String("stdio".into()))];
+            (*name, json::mcp_entry(req, args, &extra))
+        })
+        .collect()
+}
+
+/// Our MCP servers in `.claude.json` itself.
+fn add_mcp(cj: &mut Value, req: &InstallRequest) -> Result<()> {
+    let servers = json::object_at(cj, "mcpServers")?;
+    for (name, entry) in mcp_entries(req) {
+        servers.insert(name.into(), entry);
+    }
+    Ok(())
+}
+
+/// The `claude mcp …` calls that put our servers in `.claude.json` (as
+/// read): none for a server already in place.
+fn cli_installs(cj: Option<&Value>, req: &InstallRequest) -> Vec<Vec<String>> {
+    let mut calls = vec![];
+    for (name, entry) in mcp_entries(req) {
+        let current = cj.and_then(|cj| cj.get("mcpServers")?.get(name));
+        if current == Some(&entry) {
+            continue;
+        }
+        if current.is_some() {
+            calls.push(argv(&["mcp", "remove", "--scope", "user", name]));
+        }
+        let entry = entry.to_string();
+        calls.push(argv(&["mcp", "add-json", "--scope", "user", name, &entry]));
+    }
+    calls
+}
+
+fn argv(args: &[&str]) -> Vec<String> {
+    args.iter().map(|a| a.to_string()).collect()
 }
 
 fn uninstall(req: &InstallRequest) -> Result<InstallResult> {
@@ -236,9 +276,15 @@ fn uninstall(req: &InstallRequest) -> Result<InstallResult> {
     if door::read(&f.claude_json)?.is_some() {
         let mut cj = json::read(&f.claude_json)?;
         if via_cli(req)? {
-            // Our entry only: a user's own `mesh` server stays.
-            if json::remove_mcp(&mut cj) {
-                run_claude(&["mcp", "remove", "--scope", "user", "mesh"])?;
+            // Our entries only: a user's own `mesh` server stays.
+            let mut removed = false;
+            for (name, ..) in json::MCP_SERVERS {
+                if json::remove_mcp_server(&mut cj, name) {
+                    run_claude(&["mcp", "remove", "--scope", "user", name])?;
+                    removed = true;
+                }
+            }
+            if removed {
                 report.files.push(f.claude_json.clone());
             }
         } else if json::remove_mcp(&mut cj) && json::write(&f.claude_json, &cj)? {
@@ -369,6 +415,69 @@ mod tests {
             render("start", Some("m".into()), Some("hi".into())),
             r#"{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"hi\n\nm"}}"#
         );
+    }
+
+    fn opts() -> InstallRequest {
+        InstallRequest {
+            mesh_bin: "/usr/local/bin/mesh".into(),
+            home: "/Users/p".into(),
+            ..InstallRequest::default()
+        }
+    }
+
+    #[test]
+    fn mcp_servers_in_the_file() {
+        let original = json!({"numStartups": 3, "mcpServers": {"gh": {"command": "gh-mcp"}}});
+        let mut cj = original.clone();
+        add_mcp(&mut cj, &opts()).unwrap();
+        assert_eq!(
+            cj["mcpServers"]["mesh"],
+            json!({"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp"]})
+        );
+        assert_eq!(
+            cj["mcpServers"]["mesh-ext"],
+            json!({"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp", "--ext"]})
+        );
+        let once = cj.clone();
+        add_mcp(&mut cj, &opts()).unwrap();
+        assert_eq!(cj, once, "idempotent");
+        assert!(json::remove_mcp(&mut cj));
+        assert_eq!(cj, original);
+    }
+
+    #[test]
+    fn mcp_servers_through_the_cli() {
+        let add = |name: &str, args: &str| {
+            argv(&[
+                "mcp",
+                "add-json",
+                "--scope",
+                "user",
+                name,
+                &format!(r#"{{"type":"stdio","command":"/usr/local/bin/mesh","args":[{args}]}}"#),
+            ])
+        };
+        let remove = |name: &str| argv(&["mcp", "remove", "--scope", "user", name]);
+        let r = opts();
+        assert_eq!(
+            cli_installs(None, &r),
+            [add("mesh", r#""mcp""#), add("mesh-ext", r#""mcp","--ext""#)]
+        );
+        let mut cj = json!({});
+        add_mcp(&mut cj, &r).unwrap();
+        assert!(cli_installs(Some(&cj), &r).is_empty(), "idempotent");
+        // An entry for an old mesh binary is replaced.
+        cj["mcpServers"]["mesh-ext"]["command"] = json!("/old/mesh");
+        assert_eq!(
+            cli_installs(Some(&cj), &r),
+            [remove("mesh-ext"), add("mesh-ext", r#""mcp","--ext""#)]
+        );
+    }
+
+    #[test]
+    fn extension_tools_are_asked_about() {
+        assert!(PERMISSIONS.contains(&"mcp__mesh__*"));
+        assert!(!PERMISSIONS.iter().any(|p| p.contains("mesh-ext")));
     }
 
     #[test]
