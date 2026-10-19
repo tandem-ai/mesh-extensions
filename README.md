@@ -14,7 +14,7 @@ the mesh repo (decisions E1–E27).
 | `providers/pi` | `mesh/pi`: Pi (a TypeScript extension) |
 | `providers/hermes` | `mesh/hermes`: Hermes (a Python plugin, enabled with `hermes plugins`) |
 | `scripts/build.sh` | builds an extension to WASM and packs it into a `.meshext` |
-| `scripts/index.sh` | builds them all and writes `dist/index.json`, the extension index |
+| `scripts/registry.sh` | builds them all and publishes them into `dist/registry`, the folder lookup serves at `/dl/extensions/` |
 
 An extension is a WebAssembly module exporting `handle`, which gets one event (JSON) and
 answers JSON. It reaches mesh through one import, `mesh_call`, behind the permissions in
@@ -27,9 +27,9 @@ scripts/build.sh claude-code                  # dist/claude-code-<version>.meshe
 mesh ext install dist/claude-code-*.meshext
 MESH_PROVIDERS=plugin mesh install claude     # through the extension
 
-scripts/index.sh                              # dist/index.json
-MESH_EXT_INDEX=$PWD/dist/index.json mesh up   # meshd reads that index:
-mesh ext install mesh/codex                   #   by id
+scripts/registry.sh                           # dist/registry: index.json + packages
+MESH_EXT_INDEX=$PWD/dist/registry/index.json mesh up   # or the lookup server's registry:
+mesh ext install mesh/codex                   #   by id, the newest version
 MESH_PROVIDERS=plugin mesh install            #   every agent found, providers on demand
 ```
 
