@@ -1,0 +1,47 @@
+Cargo.lock
+  s_4f4e2e0c49b6e0::t_7971e550d45dff 52,62,93,197
+README.md
+  s_4f4e2e0c49b6e0::t_c0123f982bb84e 10-13
+providers/claude-code/Cargo.toml
+  s_4f4e2e0c49b6e0::t_e1329dcf69e5da 4
+providers/claude-code/manifest.toml
+  s_4f4e2e0c49b6e0::t_a40447993775b5 2,6,23-28
+providers/claude-code/src/lib.rs
+  s_4f4e2e0c49b6e0::t_b718593f3cecb6 6-10,47,185-189,194,202-203,209-250,279-287,420-482
+providers/codex/Cargo.toml
+  s_4f4e2e0c49b6e0::t_b8faa4e8135853 4
+providers/codex/manifest.toml
+  s_4f4e2e0c49b6e0::t_7a5be6078f9530 2,6
+providers/codex/src/lib.rs
+  s_4f4e2e0c49b6e0::t_a950caddec6cc5 5-6,17-20,198-199,209,212-233,235-236,335-343,577,580-582,605,618-619,621,642-643,645-647
+providers/cursor/Cargo.toml
+  s_4f4e2e0c49b6e0::t_094d2b26e81c6b 4
+providers/cursor/manifest.toml
+  s_4f4e2e0c49b6e0::t_82af9d992498e9 2,6
+providers/cursor/src/lib.rs
+  s_4f4e2e0c49b6e0::t_3abaf7fc67e77f 5-9,118-119,196,198-204,327,331-335,337-341,346
+providers/gemini/Cargo.toml
+  s_4f4e2e0c49b6e0::t_48ddafa5f73036 4
+providers/gemini/manifest.toml
+  s_4f4e2e0c49b6e0::t_f1ebef9c592238 2,6
+providers/gemini/src/lib.rs
+  s_4f4e2e0c49b6e0::t_db75e61f78d0a0 5-7,12-13,97,117,132-140,144,250-254,264-285
+sdk/rust/src/config.rs
+  s_4f4e2e0c49b6e0::t_8bd2ce251e3fe5 47-55,65-66,74,218,220-226,230,233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "14da74577ee246b3d191cd13e5413980f2232482",
+  "prompts": {},
+  "sessions": {
+    "s_4f4e2e0c49b6e0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "493637eb-2663-4be8-bcb1-480b613f2a1b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Paul FOURNET <paul.pfournet@gmail.com>"
+    }
+  }
+}
