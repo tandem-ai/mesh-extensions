@@ -7,7 +7,11 @@ description = "Connects Gemini CLI to mesh: hooks and the mesh MCP server."
 
 [provider]
 agent = "gemini"
+name = "Gemini CLI"
 install_env = ["GEMINI_CLI_HOME"]
+
+[provider.session]
+processes = ["gemini"]
 
 [provider.detect]
 commands = ["gemini"]

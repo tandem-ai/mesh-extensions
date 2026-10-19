@@ -7,7 +7,11 @@ description = "Connects Pi to mesh: an extension that serves the session's inbox
 
 [provider]
 agent = "pi"
+name = "Pi"
 install_env = ["PI_CODING_AGENT_DIR"]
+
+[provider.session]
+processes = ["pi"]
 
 [provider.detect]
 commands = ["pi"]

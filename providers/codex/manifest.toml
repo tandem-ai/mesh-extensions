@@ -7,7 +7,17 @@ description = "Connects Codex to mesh: trusted hooks and the mesh MCP server."
 
 [provider]
 agent = "codex"
+name = "Codex"
 install_env = ["CODEX_HOME"]
+
+[provider.session]
+processes = ["codex"]
+# `codex app-server …` runs every chat's tools: reaching it means no one chat.
+hosts = ["app-server"]
+# Its shell names the chat (thread) a command runs for.
+chat_env = "CODEX_THREAD_ID"
+# Its MCP servers can't tell which chat calls them; its shell can.
+send = "shell"
 
 [provider.detect]
 commands = ["codex"]

@@ -7,7 +7,14 @@ description = "Connects Cursor (editor and CLI) to mesh: hooks, the mesh MCP ser
 
 [provider]
 agent = "cursor"
+name = "Cursor"
 install_env = []
+
+[provider.session]
+# A chat is its conversation, whatever process runs the tool.
+chat_env = "CURSOR_CONVERSATION_ID"
+# Cursor keeps typed text as an editable draft: never type into it.
+typing = false
 
 [provider.detect]
 # The app alone counts: its agent CLI comes with it.

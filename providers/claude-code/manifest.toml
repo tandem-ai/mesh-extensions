@@ -7,8 +7,12 @@ description = "Connects Claude Code to mesh: hooks, the mesh MCP server and perm
 
 [provider]
 agent = "claude"
+name = "Claude Code"
 install_env = ["CLAUDE_CONFIG_DIR"]
 hook_env = ["CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN"]
+
+[provider.session]
+processes = ["claude"]
 
 [provider.detect]
 commands = ["claude"]
