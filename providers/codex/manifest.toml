@@ -1,0 +1,18 @@
+id = "mesh/codex"
+version = "0.1.0"
+api = "1.1"
+kind = "provider"
+scope = "personal"
+description = "Connects Codex to mesh: trusted hooks and the mesh MCP server."
+
+[provider]
+agent = "codex"
+install_env = ["CODEX_HOME"]
+
+[permissions.door]
+# One file: hooks, their trust and the MCP server all live in config.toml.
+fs_write = [
+  "~/.codex/config.toml",
+  "{config_dir}/config.toml",
+  "${CODEX_HOME}/config.toml",
+]

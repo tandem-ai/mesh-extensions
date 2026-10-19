@@ -1,0 +1,20 @@
+id = "mesh/cursor"
+version = "0.1.0"
+api = "1.1"
+kind = "provider"
+scope = "personal"
+description = "Connects Cursor (editor and CLI) to mesh: hooks, the mesh MCP server and the CLI's allow list."
+
+[provider]
+agent = "cursor"
+install_env = []
+
+[permissions.door]
+fs_write = [
+  "~/.cursor/hooks.json",
+  "~/.cursor/mcp.json",
+  "~/.cursor/cli-config.json",
+  "{config_dir}/hooks.json",
+  "{config_dir}/mcp.json",
+  "{config_dir}/cli-config.json",
+]

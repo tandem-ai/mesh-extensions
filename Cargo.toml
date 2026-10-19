@@ -3,6 +3,11 @@ resolver = "3"
 members = [
   "sdk/rust",
   "providers/claude-code",
+  "providers/codex",
+  "providers/gemini",
+  "providers/cursor",
+  "providers/pi",
+  "providers/hermes",
 ]
 
 [workspace.package]
@@ -17,6 +22,8 @@ serde = { version = "1", features = ["derive"] }
 # Keys keep their order, as agents' config files have them.
 serde_json = { version = "1", features = ["preserve_order"] }
 anyhow = "1"
+sha2 = "0.10"
+toml_edit = "0.25"
 
 [profile.release]
 opt-level = "s"

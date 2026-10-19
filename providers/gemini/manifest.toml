@@ -1,0 +1,17 @@
+id = "mesh/gemini"
+version = "0.1.0"
+api = "1.1"
+kind = "provider"
+scope = "personal"
+description = "Connects Gemini CLI to mesh: hooks and the mesh MCP server."
+
+[provider]
+agent = "gemini"
+install_env = ["GEMINI_CLI_HOME"]
+
+[permissions.door]
+fs_write = [
+  "~/.gemini/settings.json",
+  "{config_dir}/settings.json",
+  "${GEMINI_CLI_HOME}/.gemini/settings.json",
+]
