@@ -1,0 +1,85 @@
+providers/hermes/src/lib.rs
+  s_75f1ea66dfc438::t_4f7b5a4d1bb1aa 1-285
+  s_75f1ea66dfc438::t_d8482906663149 286-309
+providers/gemini/manifest.toml
+  s_c39270169dd1dd::t_e08ecb975d67c3 1-17
+providers/pi/src/lib.rs
+  s_75f1ea66dfc438::t_64c79fdd19c59c 1-264
+  s_75f1ea66dfc438::t_889a8811b08986 265-282
+providers/cursor/manifest.toml
+  s_c39270169dd1dd::t_f851e914de7fb4 1-20
+providers/codex/manifest.toml
+  s_1cfd2713f47c37::t_274b574bd3c306 1-18
+providers/cursor/src/lib.rs
+  s_c39270169dd1dd::t_66f4837f9998da 1-435
+  s_c39270169dd1dd::t_1bf12caf5ecc2a 436-438
+providers/hermes/manifest.toml
+  s_75f1ea66dfc438::t_6d746c2c6c429f 1-31
+providers/pi/manifest.toml
+  s_75f1ea66dfc438::t_15e29b08e896c8 1-17
+providers/gemini/src/lib.rs
+  s_c39270169dd1dd::t_9559634e02e85b 1-301
+  s_c39270169dd1dd::t_bfb987cf560439 302-363
+providers/codex/src/lib.rs
+  s_1cfd2713f47c37::t_0619527f9eb8ee 1-692
+Cargo.lock
+  s_4e847d493e472e::t_cf12c1818f4330 23-31,44-49,60-110,195-214,221-230,256-261,310-319,445-455,502,515-526,533-538
+Cargo.toml
+  s_4e847d493e472e::t_a3daa88e03d4b9 6-10,25-26
+README.md
+  s_4e847d493e472e::t_ab238b2cf3820f 11-15
+providers/codex/Cargo.toml
+  s_4e847d493e472e::t_da614a2390e2b0 1-18
+providers/cursor/Cargo.toml
+  s_4e847d493e472e::t_c2fdcdaa2632b2 1-16
+providers/gemini/Cargo.toml
+  s_4e847d493e472e::t_a17b2b6e64a341 1-16
+providers/hermes/Cargo.toml
+  s_4e847d493e472e::t_4f54e08dfd5f55 1-16
+providers/hermes/src/hermes-plugin.py
+  s_75f1ea66dfc438::t_7f130199ba5569 1-145
+providers/pi/Cargo.toml
+  s_4e847d493e472e::t_8d10c191449ce4 1-16
+providers/pi/src/pi-extension.ts
+  s_75f1ea66dfc438::t_21f90b989fa29e 1-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "28ae6332a5d88d09b62a27dea9aa7c49a97ef4c9",
+  "prompts": {},
+  "sessions": {
+    "s_1cfd2713f47c37": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c46faac8-2b4b-4ce6-904c-cc6e44c0f416",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Paul FOURNET <paul.pfournet@gmail.com>"
+    },
+    "s_4e847d493e472e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4549e281-5e03-429d-925a-58055b88639a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Paul FOURNET <paul.pfournet@gmail.com>"
+    },
+    "s_75f1ea66dfc438": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "196421ea-8788-4c13-98bc-0c836a6ca384",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Paul FOURNET <paul.pfournet@gmail.com>"
+    },
+    "s_c39270169dd1dd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0b28797e-961d-4fc7-b845-45ab50fdc8ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Paul FOURNET <paul.pfournet@gmail.com>"
+    }
+  }
+}
