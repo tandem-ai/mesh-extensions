@@ -1,0 +1,14 @@
+id = "mesh/pulse"
+version = "0.1.0"
+api = "1.2"
+kind = "wasm"
+scope = "org"
+description = "An org's pulse: a server part that counts the minutes and keeps the last webhook in the org's store."
+
+[server]
+every = ["1m"]
+webhook = true
+
+[permissions]
+store = true
+server = true

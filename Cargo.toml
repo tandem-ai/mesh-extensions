@@ -8,6 +8,7 @@ members = [
   "providers/cursor",
   "providers/pi",
   "providers/hermes",
+  "extensions/pulse",
 ]
 
 [workspace.package]
