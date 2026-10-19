@@ -73,7 +73,9 @@ pub enum Event {
         session: Option<String>,
     },
     /// Server parts (1.2): one of `[server] every` passed.
-    Cron { every: String },
+    Cron {
+        every: String,
+    },
     /// Server parts (1.2): a POST to its webhook URL. Answer a
     /// [`WebhookReply`] (or nothing: 200, empty).
     Webhook {
