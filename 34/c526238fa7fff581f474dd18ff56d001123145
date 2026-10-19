@@ -1,0 +1,21 @@
+extensions/pulse/manifest.toml
+  s_4e847d493e472e::t_8ad60148b6e1e6 12-15
+extensions/pulse/src/lib.rs
+  s_4e847d493e472e::t_8f589907f192f2 6-7,13,25,65-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "34c526238fa7fff581f474dd18ff56d001123145",
+  "prompts": {},
+  "sessions": {
+    "s_4e847d493e472e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4549e281-5e03-429d-925a-58055b88639a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Paul FOURNET <paul.pfournet@gmail.com>"
+    }
+  }
+}
