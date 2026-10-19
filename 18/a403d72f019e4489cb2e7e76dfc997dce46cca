@@ -1,0 +1,33 @@
+README.md
+  s_4e847d493e472e::t_d0ac629d2da362 17,29-33
+providers/claude-code/manifest.toml
+  s_4e847d493e472e::t_044de78b36810a 13-15
+providers/codex/manifest.toml
+  s_4e847d493e472e::t_f066e80b16910f 12-14
+providers/cursor/manifest.toml
+  s_4e847d493e472e::t_5eebbbdf2f6086 12-16
+providers/gemini/manifest.toml
+  s_4e847d493e472e::t_24cdc3e3496ff7 12-14
+providers/hermes/manifest.toml
+  s_4e847d493e472e::t_cbf96adba478b0 12-14
+providers/pi/manifest.toml
+  s_4e847d493e472e::t_6d267871176055 12-14
+scripts/index.sh
+  s_4e847d493e472e::t_5032dcfceed1d9 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "18a403d72f019e4489cb2e7e76dfc997dce46cca",
+  "prompts": {},
+  "sessions": {
+    "s_4e847d493e472e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4549e281-5e03-429d-925a-58055b88639a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Paul FOURNET <paul.pfournet@gmail.com>"
+    }
+  }
+}
