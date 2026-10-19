@@ -9,6 +9,10 @@ description = "An org's pulse: a server part that counts the minutes and keeps t
 every = ["1m"]
 webhook = true
 
+[[contributes.agent_tools]]
+name = "ticks"
+description = "How many minutes the org's pulse has counted, and the last webhook it got."
+
 [permissions]
 store = true
 server = true
