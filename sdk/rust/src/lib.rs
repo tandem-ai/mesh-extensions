@@ -63,6 +63,15 @@ pub enum Event {
         #[serde(default)]
         deleted: bool,
     },
+    /// Desktop pages (1.2): a `ui/` page called `mesh.call(data)`. The
+    /// answer (any JSON) goes back to the page. `message`: a card's message.
+    Ui {
+        page: String,
+        #[serde(default)]
+        data: Value,
+        #[serde(default)]
+        message: Option<Value>,
+    },
     /// Agent tools (1.2): an agent called one of `agent_tools`. Answer a
     /// [`ToolReply`].
     Tool {
