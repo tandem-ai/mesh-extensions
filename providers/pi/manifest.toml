@@ -9,6 +9,9 @@ description = "Connects Pi to mesh: an extension that serves the session's inbox
 agent = "pi"
 install_env = ["PI_CODING_AGENT_DIR"]
 
+[provider.detect]
+commands = ["pi"]
+
 [permissions.door]
 fs_write = [
   "~/.pi/agent/extensions/mesh.ts",

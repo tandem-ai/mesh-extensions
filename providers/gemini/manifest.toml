@@ -9,6 +9,9 @@ description = "Connects Gemini CLI to mesh: hooks and the mesh MCP server."
 agent = "gemini"
 install_env = ["GEMINI_CLI_HOME"]
 
+[provider.detect]
+commands = ["gemini"]
+
 [permissions.door]
 fs_write = [
   "~/.gemini/settings.json",

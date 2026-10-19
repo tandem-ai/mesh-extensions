@@ -9,6 +9,9 @@ description = "Connects Codex to mesh: trusted hooks and the mesh MCP server."
 agent = "codex"
 install_env = ["CODEX_HOME"]
 
+[provider.detect]
+commands = ["codex"]
+
 [permissions.door]
 # One file: hooks, their trust and the MCP server all live in config.toml.
 fs_write = [

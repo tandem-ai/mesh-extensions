@@ -9,6 +9,9 @@ description = "Connects Hermes Agent to mesh: a plugin that serves the session's
 agent = "hermes"
 install_env = ["HERMES_HOME"]
 
+[provider.detect]
+commands = ["hermes"]
+
 [permissions.door]
 # Hermes loads a user plugin once it is enabled (and allowed to start turns);
 # uninstall turns it off again.

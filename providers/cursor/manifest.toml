@@ -9,6 +9,11 @@ description = "Connects Cursor (editor and CLI) to mesh: hooks, the mesh MCP ser
 agent = "cursor"
 install_env = []
 
+[provider.detect]
+# The app alone counts: its agent CLI comes with it.
+commands = ["cursor", "cursor-agent"]
+apps = ["Cursor.app"]
+
 [permissions.door]
 fs_write = [
   "~/.cursor/hooks.json",

@@ -10,6 +10,9 @@ agent = "claude"
 install_env = ["CLAUDE_CONFIG_DIR"]
 hook_env = ["CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN"]
 
+[provider.detect]
+commands = ["claude"]
+
 [permissions.door]
 # The user-scope MCP server goes through Claude's own CLI when no config
 # dir is given: a running Claude rewrites .claude.json all the time.
