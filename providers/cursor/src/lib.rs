@@ -345,6 +345,7 @@ mod tests {
         add_permission(&mut c, "/c/cli-config.json").unwrap();
         // Not `Mcp(mesh-ext:*)`: extension tools are asked about.
         assert_eq!(c["permissions"]["allow"], json!(["Mcp(mesh:*)"]));
+        assert!(!c.to_string().contains("mesh-ext"));
         remove_permission(&mut c);
         assert_eq!(c, json!({"permissions": {"allow": []}}));
     }

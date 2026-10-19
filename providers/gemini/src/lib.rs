@@ -252,6 +252,7 @@ mod tests {
             s["mcpServers"]["mesh-ext"],
             json!({"command": "/usr/local/bin/mesh", "args": ["mcp", "--ext"]})
         );
+        assert!(s["mcpServers"]["mesh-ext"].get("trust").is_none());
         assert_eq!(s["mcpServers"]["gh"]["command"], "gh-mcp");
 
         let once = s.clone();

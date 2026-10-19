@@ -589,6 +589,12 @@ mod tests {
             "[hooks.state.\"{SRC}:stop:0:0\"]\ntrusted_hash = \"sha256:02911bcc39ab4b939d35d4cbbb0f5781dc07a39441efaebadaab2acf2b8ca612\"\n"
         );
         assert!(out.contains(&stop), "{out}");
+        let doc = parse_doc(&out, "c.toml").unwrap();
+        assert!(
+            doc["mcp_servers"]["mesh-ext"]
+                .get("default_tools_approval_mode")
+                .is_none()
+        );
         for (event, label, _, _) in EVENTS {
             assert!(out.contains(&format!("[[hooks.{event}.hooks]]")), "{event}");
             assert!(out.contains(&format!("{SRC}:{label}:0:0")), "{label}");
