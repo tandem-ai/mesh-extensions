@@ -1,0 +1,19 @@
+LICENSE
+  s_4e847d493e472e::t_5259760d94439b 1-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "14593d2792243e4c998b502c4bf1bd1d52187dc4",
+  "prompts": {},
+  "sessions": {
+    "s_4e847d493e472e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4549e281-5e03-429d-925a-58055b88639a",
+        "model": "unknown"
+      },
+      "human_author": "Paul FOURNET <paul.pfournet@gmail.com>"
+    }
+  }
+}
