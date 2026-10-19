@@ -1,0 +1,24 @@
+id = "mesh/claude-code"
+version = "0.1.0"
+api = "1.1"
+kind = "provider"
+scope = "personal"
+description = "Connects Claude Code to mesh: hooks, the mesh MCP server and permissions."
+
+[provider]
+agent = "claude"
+install_env = ["CLAUDE_CONFIG_DIR"]
+hook_env = ["CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN"]
+
+[permissions.door]
+# The user-scope MCP server goes through Claude's own CLI when no config
+# dir is given: a running Claude rewrites .claude.json all the time.
+exec = ["claude mcp add-json --scope user mesh", "claude mcp remove --scope user mesh"]
+fs_write = [
+  "~/.claude/settings.json",
+  "~/.claude.json",
+  "{config_dir}/settings.json",
+  "{config_dir}/.claude.json",
+  "${CLAUDE_CONFIG_DIR}/settings.json",
+  "${CLAUDE_CONFIG_DIR}/.claude.json",
+]
