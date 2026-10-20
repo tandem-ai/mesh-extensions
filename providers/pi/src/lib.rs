@@ -8,6 +8,8 @@
 //!   extensions from there at start. Pi has no hooks of its own to
 //!   configure; the extension serves the session's inbox and runs
 //!   `mesh hook pi <event>` itself (see `pi-extension.ts`);
+//! - launch (a cloud agent's run): the same extension in the run's folder,
+//!   given to Pi with `--extension`; nothing in `~/.pi`;
 //! - hooks: which session event each call is, and what it prints (raw text).
 //!
 //! Docs: <https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md>
@@ -21,7 +23,9 @@ use anyhow::Result;
 use extism_pdk::{FnResult, plugin_fn};
 #[cfg(target_arch = "wasm32")]
 use mesh_ext::Event;
-use mesh_ext::{HookParsed, HookRendered, InstallRequest, InstallResult, door};
+use mesh_ext::{
+    HookParsed, HookRendered, InstallRequest, InstallResult, LaunchRequest, LaunchResult, door,
+};
 use serde_json::Value;
 
 const TEMPLATE: &str = include_str!("pi-extension.ts");
@@ -36,6 +40,12 @@ pub fn handle(input: String) -> FnResult<String> {
     let answer = match Event::parse(&input)? {
         Event::Install(req) => serde_json::to_value(result(install(&req)))?,
         Event::Uninstall(req) => serde_json::to_value(result(uninstall(&req)))?,
+        Event::Launch(req) => {
+            serde_json::to_value(launch(&req).unwrap_or_else(|e| LaunchResult {
+                error: Some(format!("{e:#}")),
+                ..LaunchResult::default()
+            }))?
+        }
         Event::Hook { name, payload, env } => serde_json::to_value(hook(&name, &payload, &env))?,
         Event::HookRender {
             kind,
@@ -96,6 +106,22 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
         .notes
         .push("Pi: the mesh extension is in place; new Pi sessions load it.".into());
     Ok(report)
+}
+
+/// The extension in the run's folder (the door's `{run_dir}/`), loaded by
+/// flag: Pi's own folder isn't touched.
+fn launch(req: &LaunchRequest) -> Result<LaunchResult> {
+    let install = req.as_install();
+    let path = extension_path(&install);
+    door::write(&path, &extension(&install))?;
+    Ok(LaunchResult {
+        args: launch_args(&path),
+        error: None,
+    })
+}
+
+fn launch_args(path: &str) -> Vec<String> {
+    vec!["--extension".into(), path.into()]
 }
 
 fn uninstall(req: &InstallRequest) -> Result<InstallResult> {
@@ -203,6 +229,25 @@ mod tests {
             extension_path(&req(Some("/tmp/agent"), Some("/x"))),
             "/tmp/agent/extensions/mesh.ts"
         );
+    }
+
+    #[test]
+    fn a_launch_loads_the_extension_from_the_run() {
+        let req = LaunchRequest {
+            dir: "/w/.mesh/pi".into(),
+            mesh_bin: "/usr/bin/mesh".into(),
+            mesh_home: "/tmp/mesh-x".into(),
+        };
+        let install = req.as_install();
+        let path = extension_path(&install);
+        assert_eq!(path, "/w/.mesh/pi/extensions/mesh.ts");
+        assert_eq!(
+            launch_args(&path),
+            ["--extension", "/w/.mesh/pi/extensions/mesh.ts"]
+        );
+        let text = extension(&install);
+        assert!(text.contains(r#"const MESH = "/usr/bin/mesh";"#));
+        assert!(text.contains(r#"const MESH_HOME_PIN = "/tmp/mesh-x";"#));
     }
 
     #[test]

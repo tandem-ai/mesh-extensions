@@ -6,6 +6,8 @@
 //!   tools, asked about on first use) in `$CODEX_HOME/config.toml` (default
 //!   `~/.codex`), edited with `toml_edit` so the user's comments and layout
 //!   stay;
+//! - launch (a cloud agent's run): the same MCP servers as `-c` overrides,
+//!   nothing written;
 //! - hooks: which session event each Codex hook is, and what it prints.
 //!
 //! ```toml
@@ -44,7 +46,10 @@ use anyhow::{Context, Result, bail};
 use extism_pdk::{FnResult, plugin_fn};
 #[cfg(target_arch = "wasm32")]
 use mesh_ext::Event;
-use mesh_ext::{HookParsed, HookRendered, InstallRequest, InstallResult, config, door};
+use mesh_ext::{
+    HookParsed, HookRendered, InstallRequest, InstallResult, LaunchRequest, LaunchResult, config,
+    door,
+};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use toml_edit::{ArrayOfTables, DocumentMut, InlineTable, Item, Table, value};
@@ -93,6 +98,10 @@ pub fn handle(input: String) -> FnResult<String> {
     let answer = match Event::parse(&input)? {
         Event::Install(req) => serde_json::to_value(result(install(&req)))?,
         Event::Uninstall(req) => serde_json::to_value(result(uninstall(&req)))?,
+        Event::Launch(req) => serde_json::to_value(LaunchResult {
+            args: launch_args(&req),
+            error: None,
+        })?,
         Event::Hook { name, payload, env } => serde_json::to_value(hook(&name, &payload, &env))?,
         Event::HookRender {
             kind,
@@ -203,6 +212,35 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
 }
 
 /// The install's edit of `config.toml` at `path`, its trust keys under `src`.
+/// A cloud agent's run: the install's MCP servers as `-c` overrides
+/// (`config.toml` keys, TOML values).
+fn launch_args(req: &LaunchRequest) -> Vec<String> {
+    let s = |v: &str| toml_edit::Value::from(v).to_string();
+    let mut out = Vec::new();
+    for (name, args, trusted) in config::MCP_SERVERS {
+        let key = format!("mcp_servers.{name}");
+        let args: toml_edit::Array = args.iter().copied().collect();
+        let mut env = InlineTable::new();
+        env.insert("MESH_HOME", req.mesh_home.as_str().into());
+        let mut set = vec![
+            format!("{key}.command={}", s(&req.mesh_bin)),
+            format!("{key}.args={args}"),
+            format!("{key}.env={env}"),
+        ];
+        if *trusted {
+            set.push(format!(
+                "{key}.default_tools_approval_mode={}",
+                s("approve")
+            ));
+        }
+        for kv in set {
+            out.push("-c".to_string());
+            out.push(kv);
+        }
+    }
+    out
+}
+
 fn install_doc(doc: &mut DocumentMut, req: &InstallRequest, path: &str, src: &str) -> Result<()> {
     let root = doc.as_table_mut();
 
@@ -546,6 +584,35 @@ mod tests {
         let mut doc = parse_doc(text, "c.toml").unwrap();
         uninstall_doc(&mut doc, SRC);
         doc.to_string()
+    }
+
+    #[test]
+    fn a_launch_passes_the_servers_as_overrides() {
+        let req = LaunchRequest {
+            dir: "/w/.mesh/codex".into(),
+            mesh_bin: "/a b/mesh".into(),
+            mesh_home: "/tmp/h".into(),
+        };
+        let args = launch_args(&req);
+        let sets: Vec<&str> = args.iter().skip(1).step_by(2).map(String::as_str).collect();
+        assert!(args.iter().step_by(2).all(|a| a == "-c"));
+        assert_eq!(
+            sets,
+            [
+                r#"mcp_servers.mesh.command="/a b/mesh""#,
+                r#"mcp_servers.mesh.args=["mcp"]"#,
+                r#"mcp_servers.mesh.env={ MESH_HOME = "/tmp/h" }"#,
+                r#"mcp_servers.mesh.default_tools_approval_mode="approve""#,
+                r#"mcp_servers.mesh-ext.command="/a b/mesh""#,
+                r#"mcp_servers.mesh-ext.args=["mcp", "--ext"]"#,
+                r#"mcp_servers.mesh-ext.env={ MESH_HOME = "/tmp/h" }"#,
+            ]
+        );
+        // Each override is the TOML the install writes.
+        for kv in &sets {
+            let (_, v) = kv.split_once('=').unwrap();
+            assert!(format!("x = {v}").parse::<DocumentMut>().is_ok(), "{kv}");
+        }
     }
 
     #[test]

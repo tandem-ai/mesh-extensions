@@ -1,6 +1,6 @@
 //! The Rust SDK for mesh extensions: the events an extension's `handle`
 //! export gets, and the host API calls it makes through `mesh_call`
-//! (host API 1.2, `docs/extensions.md` in the mesh repo).
+//! (host API 1.3, `docs/extensions.md` in the mesh repo).
 //!
 //! ```ignore
 //! use extism_pdk::*;
@@ -29,7 +29,7 @@ extern "ExtismHost" {
 }
 
 /// The host API version this SDK speaks.
-pub const API: &str = "1.2";
+pub const API: &str = "1.3";
 
 /// What the host hands `handle`. Events this SDK doesn't know are
 /// [`Event::Other`]: ignore them.
@@ -45,6 +45,11 @@ pub enum Event {
     },
     Install(InstallRequest),
     Uninstall(InstallRequest),
+    /// Providers (1.3): the agent runs once, in a cloud agent's run (`mesh
+    /// run --token`), with mesh's tools and nothing written outside `dir`
+    /// (the door's `{run_dir}/`, its only paths then; no commands). Answer
+    /// a [`LaunchResult`].
+    Launch(LaunchRequest),
     Hook {
         name: String,
         payload: Value,
@@ -128,6 +133,38 @@ pub struct InstallRequest {
     pub home: String,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct LaunchRequest {
+    /// The run's folder for this agent, kept between runs of the same
+    /// conversation.
+    pub dir: String,
+    pub mesh_bin: String,
+    /// The run's device folder (`MESH_HOME`).
+    pub mesh_home: String,
+}
+
+impl LaunchRequest {
+    /// As an install into `dir`, for the config helpers.
+    pub fn as_install(&self) -> InstallRequest {
+        InstallRequest {
+            config_dir: Some(self.dir.clone()),
+            mesh_bin: self.mesh_bin.clone(),
+            mesh_home: Some(self.mesh_home.clone()),
+            home: String::new(),
+            env: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct LaunchResult {
+    /// Put before the person's arguments.
+    pub args: Vec<String>,
+    /// Why the agent can't have mesh's tools this run: it runs without.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]

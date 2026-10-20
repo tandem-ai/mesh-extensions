@@ -8,6 +8,11 @@
 //!   dir is given and `claude` is on PATH: a running Claude rewrites that
 //!   file all the time). Only `mesh`'s tools are allowed without asking;
 //!   extension tools are asked about on first use;
+//! - launch (a cloud agent's run): the same servers in the run's
+//!   `mcp.json`, given with `--mcp-config`, and `mesh`'s tools allowed with
+//!   `--allowedTools`; nothing in `~/.claude`. Both flags take several
+//!   values, so each is passed as `--flag=value`: the person's prompt that
+//!   follows stays a prompt;
 //! - hooks: which session event each Claude hook is, and what it prints.
 //!
 //! Docs: <https://code.claude.com/docs/en/hooks>, <https://code.claude.com/docs/en/mcp>.
@@ -22,7 +27,8 @@ use extism_pdk::{FnResult, plugin_fn};
 #[cfg(target_arch = "wasm32")]
 use mesh_ext::Event;
 use mesh_ext::{
-    HookParsed, HookRendered, Inbox, InstallRequest, InstallResult, config as json, door,
+    HookParsed, HookRendered, Inbox, InstallRequest, InstallResult, LaunchRequest, LaunchResult,
+    config as json, door,
 };
 use serde_json::{Value, json};
 
@@ -66,6 +72,12 @@ pub fn handle(input: String) -> FnResult<String> {
     let answer = match Event::parse(&input)? {
         Event::Install(req) => serde_json::to_value(result(install(&req)))?,
         Event::Uninstall(req) => serde_json::to_value(result(uninstall(&req)))?,
+        Event::Launch(req) => {
+            serde_json::to_value(launch(&req).unwrap_or_else(|e| LaunchResult {
+                error: Some(format!("{e:#}")),
+                ..LaunchResult::default()
+            }))?
+        }
         Event::Hook { name, payload, env } => serde_json::to_value(hook(&name, &payload, &env))?,
         Event::HookRender {
             kind,
@@ -215,6 +227,32 @@ fn mcp_entries(req: &InstallRequest) -> Vec<(&'static str, Value)> {
             (*name, json::mcp_entry(req, args, &extra))
         })
         .collect()
+}
+
+/// A cloud agent's run: our servers in `<run>/mcp.json` (the door's
+/// `{run_dir}/`), mesh's tools allowed.
+fn launch(req: &LaunchRequest) -> Result<LaunchResult> {
+    let (path, text) = launch_config(req);
+    door::write(&path, &text)?;
+    Ok(LaunchResult {
+        args: launch_args(&path),
+        error: None,
+    })
+}
+
+fn launch_config(req: &LaunchRequest) -> (String, String) {
+    let mut cfg = json!({});
+    add_mcp(&mut cfg, &req.as_install()).expect("an object");
+    let path = format!("{}/mcp.json", req.dir.trim_end_matches('/'));
+    let text = serde_json::to_string_pretty(&cfg).expect("JSON") + "\n";
+    (path, text)
+}
+
+fn launch_args(path: &str) -> Vec<String> {
+    vec![
+        format!("--mcp-config={path}"),
+        "--allowedTools=mcp__mesh__*".into(),
+    ]
 }
 
 /// Our MCP servers in `.claude.json` itself.
@@ -423,6 +461,35 @@ mod tests {
             home: "/Users/p".into(),
             ..InstallRequest::default()
         }
+    }
+
+    #[test]
+    fn a_launch_brings_the_servers_and_touches_no_config() {
+        let req = LaunchRequest {
+            dir: "/w/.mesh/claude/".into(),
+            mesh_bin: "/usr/local/bin/mesh".into(),
+            mesh_home: "/tmp/mesh-x".into(),
+        };
+        let (path, text) = launch_config(&req);
+        assert_eq!(path, "/w/.mesh/claude/mcp.json");
+        let cfg: Value = serde_json::from_str(&text).unwrap();
+        let env = json!({"MESH_HOME": "/tmp/mesh-x"});
+        assert_eq!(
+            cfg,
+            json!({"mcpServers": {
+                "mesh": {"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp"], "env": env},
+                "mesh-ext": {"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp", "--ext"], "env": env},
+            }})
+        );
+        // One value each: a prompt after them isn't read as a config file.
+        assert_eq!(
+            launch_args(&path),
+            [
+                "--mcp-config=/w/.mesh/claude/mcp.json",
+                "--allowedTools=mcp__mesh__*"
+            ]
+        );
+        assert!(PERMISSIONS.contains(&"mcp__mesh__*"), "the install's own");
     }
 
     #[test]
