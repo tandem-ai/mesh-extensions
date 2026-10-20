@@ -40,8 +40,8 @@ mesh install                                  #   every agent found, providers o
 `MESH_SIGN_KEY`; debug builds of mesh also trust `MESH_EXT_DEV_KEY`).
 
 Getting an extension on mesh's official list: open a PR here. The mesh team reviews it by
-hand; once it is on `main`, mesh's Extensions workflow builds what the registry doesn't
-have yet (an id at a new version), signs it and publishes it, within the hour. A
+hand; once it is on `main`, the mesh team runs mesh's Extensions workflow, which builds
+what the registry doesn't have yet (an id at a new version), signs it and publishes it. A
 published version never changes: bump `version` in `manifest.toml` and `Cargo.toml`.
 
 Licence: Apache-2.0.
