@@ -1,6 +1,6 @@
 //! The Rust SDK for mesh extensions: the events an extension's `handle`
 //! export gets, and the host API calls it makes through `mesh_call`
-//! (host API 1.1, `docs/extensions.md` in the mesh repo).
+//! (host API 1.2, `docs/extensions.md` in the mesh repo).
 //!
 //! ```ignore
 //! use extism_pdk::*;
@@ -29,7 +29,7 @@ extern "ExtismHost" {
 }
 
 /// The host API version this SDK speaks.
-pub const API: &str = "1.1";
+pub const API: &str = "1.2";
 
 /// What the host hands `handle`. Events this SDK doesn't know are
 /// [`Event::Other`]: ignore them.
@@ -56,8 +56,62 @@ pub enum Event {
         handover: Option<String>,
         intro: Option<String>,
     },
+    /// Org extensions with `store` (1.2): a key of its store changed.
+    StoreChange {
+        key: String,
+        version: u64,
+        #[serde(default)]
+        deleted: bool,
+    },
+    /// Desktop pages (1.2): a `ui/` page called `mesh.call(data)`. The
+    /// answer (any JSON) goes back to the page. `message`: a card's message.
+    Ui {
+        page: String,
+        #[serde(default)]
+        data: Value,
+        #[serde(default)]
+        message: Option<Value>,
+    },
+    /// Agent tools (1.2): an agent called one of `agent_tools`. Answer a
+    /// [`ToolReply`].
+    Tool {
+        name: String,
+        #[serde(default)]
+        input: Value,
+        #[serde(default)]
+        session: Option<String>,
+    },
+    /// Server parts (1.2): one of `[server] every` passed.
+    Cron {
+        every: String,
+    },
+    /// Server parts (1.2): a POST to its webhook URL. Answer a
+    /// [`WebhookReply`] (or nothing: 200, empty).
+    Webhook {
+        #[serde(default)]
+        headers: std::collections::BTreeMap<String, String>,
+        #[serde(default)]
+        body: String,
+    },
     #[serde(other)]
     Other,
+}
+
+/// What an extension answers a `tool` event.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ToolReply {
+    pub text: String,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_error: bool,
+}
+
+/// What a server part answers a webhook.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct WebhookReply {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
 }
 
 impl Event {
@@ -194,5 +248,50 @@ pub mod door {
     /// Runs a declared command (`argv[0]` is its name, found on `PATH`).
     pub fn exec(argv: &[&str]) -> Result<Output, HostError> {
         call("door_exec", json!({ "argv": argv }))
+    }
+}
+
+/// The org store (1.2; org extensions with the `store` permission): keys
+/// `org/<k>` (every member reads, admins write), `person/<handle>/<k>`
+/// (every member reads, that person writes) and `private/<handle>/<k>`
+/// (that person only). mesh-control enforces the scopes.
+pub mod store {
+    use serde::Deserialize;
+    use serde_json::{Value, json};
+
+    use super::{HostError, call};
+
+    #[derive(Debug, Clone, Deserialize)]
+    pub struct Entry {
+        pub key: String,
+        pub value: Value,
+        pub version: u64,
+        pub updated_by: String,
+        pub updated_at: String,
+    }
+
+    /// The key's entry, None when it doesn't exist.
+    pub fn get(key: &str) -> Result<Option<Entry>, HostError> {
+        let v: Value = call("store_get", json!({ "key": key }))?;
+        Ok(serde_json::from_value(v).ok())
+    }
+
+    /// Writes `value`. With `if_version` (0: the key must not exist yet), a
+    /// write that lost a race fails with the `conflict` code.
+    pub fn put(key: &str, value: Value, if_version: Option<u64>) -> Result<Entry, HostError> {
+        call(
+            "store_put",
+            json!({ "key": key, "value": value, "if_version": if_version }),
+        )
+    }
+
+    pub fn delete(key: &str) -> Result<(), HostError> {
+        let _: Value = call("store_delete", json!({ "key": key }))?;
+        Ok(())
+    }
+
+    /// Keys starting with `prefix` this person may read.
+    pub fn list(prefix: &str) -> Result<Vec<Entry>, HostError> {
+        call("store_list", json!({ "prefix": prefix }))
     }
 }

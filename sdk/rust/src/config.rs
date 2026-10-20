@@ -44,7 +44,15 @@ pub fn is_our_hook(command: &str, agent: &str) -> bool {
     })
 }
 
-/// True when an MCP server entry runs `mesh mcp`.
+/// Our MCP servers: (name, args after the mesh binary, tools run without
+/// asking). `mesh-ext` serves the tools mesh extensions contribute; those
+/// are asked about on first use.
+pub const MCP_SERVERS: &[(&str, &[&str], bool)] = &[
+    ("mesh", &["mcp"], true),
+    ("mesh-ext", &["mcp", "--ext"], false),
+];
+
+/// True when an MCP server entry runs the mesh binary.
 pub fn is_our_mcp(entry: &Value) -> bool {
     let bin = entry
         .get("command")
@@ -54,8 +62,8 @@ pub fn is_our_mcp(entry: &Value) -> bool {
     bin == "mesh"
 }
 
-/// The MCP server entry for JSON configs.
-pub fn mcp_entry(req: &InstallRequest, extra: &[(&str, Value)]) -> Value {
+/// An MCP server entry running `mesh <args>`, for JSON configs.
+pub fn mcp_entry(req: &InstallRequest, args: &[&str], extra: &[(&str, Value)]) -> Value {
     let mut m = Map::new();
     for (k, v) in extra.iter().filter(|(k, _)| *k == "type") {
         m.insert(k.to_string(), v.clone());
@@ -63,7 +71,7 @@ pub fn mcp_entry(req: &InstallRequest, extra: &[(&str, Value)]) -> Value {
     m.insert("command".into(), Value::String(req.mesh_bin.clone()));
     m.insert(
         "args".into(),
-        Value::Array(vec![Value::String("mcp".into())]),
+        Value::Array(args.iter().map(|a| Value::String(a.to_string())).collect()),
     );
     if let Some(home) = &req.mesh_home {
         let mut env = Map::new();
@@ -207,15 +215,22 @@ pub fn remove_hooks(root: &mut Value, agent: &str) {
     }
 }
 
-/// Removes `mcpServers.mesh` when it is ours; drops an emptied table.
+/// Removes our MCP servers (`MCP_SERVERS`); drops an emptied table.
 pub fn remove_mcp(root: &mut Value) -> bool {
+    MCP_SERVERS
+        .iter()
+        .fold(false, |any, (name, ..)| remove_mcp_server(root, name) | any)
+}
+
+/// Removes `mcpServers.<name>` when it is ours; drops an emptied table.
+pub fn remove_mcp_server(root: &mut Value, name: &str) -> bool {
     let Some(servers) = root.get_mut("mcpServers").and_then(Value::as_object_mut) else {
         return false;
     };
-    if !servers.get("mesh").is_some_and(is_our_mcp) {
+    if !servers.get(name).is_some_and(is_our_mcp) {
         return false;
     }
-    servers.remove("mesh");
+    servers.remove(name);
     if servers.is_empty() {
         root.as_object_mut().unwrap().remove("mcpServers");
     }

@@ -1,0 +1,38 @@
+id = "mesh/hermes"
+version = "0.1.0"
+api = "1.1"
+kind = "provider"
+scope = "personal"
+description = "Connects Hermes Agent to mesh: a plugin that serves the session's inbox and runs its hooks."
+
+[provider]
+agent = "hermes"
+name = "Hermes"
+install_env = ["HERMES_HOME"]
+
+[provider.session]
+processes = ["hermes"]
+
+[provider.detect]
+commands = ["hermes"]
+
+[permissions.door]
+# Hermes loads a user plugin once it is enabled (and allowed to start turns);
+# uninstall turns it off again.
+exec = [
+  "hermes plugins enable mesh",
+  "hermes config set plugins.entries.mesh.allow_gateway_injection true",
+  "hermes plugins disable mesh",
+]
+# The plugin folder itself goes on uninstall.
+fs_write = [
+  "~/.hermes/plugins/mesh",
+  "~/.hermes/plugins/mesh/plugin.yaml",
+  "~/.hermes/plugins/mesh/__init__.py",
+  "{config_dir}/plugins/mesh",
+  "{config_dir}/plugins/mesh/plugin.yaml",
+  "{config_dir}/plugins/mesh/__init__.py",
+  "${HERMES_HOME}/plugins/mesh",
+  "${HERMES_HOME}/plugins/mesh/plugin.yaml",
+  "${HERMES_HOME}/plugins/mesh/__init__.py",
+]

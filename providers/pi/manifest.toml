@@ -1,0 +1,24 @@
+id = "mesh/pi"
+version = "0.1.0"
+api = "1.1"
+kind = "provider"
+scope = "personal"
+description = "Connects Pi to mesh: an extension that serves the session's inbox and runs its hooks."
+
+[provider]
+agent = "pi"
+name = "Pi"
+install_env = ["PI_CODING_AGENT_DIR"]
+
+[provider.session]
+processes = ["pi"]
+
+[provider.detect]
+commands = ["pi"]
+
+[permissions.door]
+fs_write = [
+  "~/.pi/agent/extensions/mesh.ts",
+  "{config_dir}/extensions/mesh.ts",
+  "${PI_CODING_AGENT_DIR}/extensions/mesh.ts",
+]

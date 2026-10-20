@@ -1,0 +1,32 @@
+id = "mesh/cursor"
+version = "0.2.0"
+api = "1.1"
+kind = "provider"
+scope = "personal"
+description = "Connects Cursor (editor and CLI) to mesh: hooks, the mesh and mesh-ext MCP servers and the CLI's allow list."
+
+[provider]
+agent = "cursor"
+name = "Cursor"
+install_env = []
+
+[provider.session]
+# A chat is its conversation, whatever process runs the tool.
+chat_env = "CURSOR_CONVERSATION_ID"
+# Cursor keeps typed text as an editable draft: never type into it.
+typing = false
+
+[provider.detect]
+# The app alone counts: its agent CLI comes with it.
+commands = ["cursor", "cursor-agent"]
+apps = ["Cursor.app"]
+
+[permissions.door]
+fs_write = [
+  "~/.cursor/hooks.json",
+  "~/.cursor/mcp.json",
+  "~/.cursor/cli-config.json",
+  "{config_dir}/hooks.json",
+  "{config_dir}/mcp.json",
+  "{config_dir}/cli-config.json",
+]
