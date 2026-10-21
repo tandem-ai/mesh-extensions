@@ -25,7 +25,7 @@ use teletap_ext::Event;
 use teletap_ext::{HookParsed, HookRendered, InstallRequest, InstallResult, door};
 
 const PLUGIN: &str = include_str!("hermes-plugin.py");
-const MANIFEST: &str = "name: teletap\nversion: \"1.0\"\ndescription: Answers from your team (mesh) come back into this session\n";
+const MANIFEST: &str = "name: teletap\nversion: \"1.0\"\ndescription: Answers from your team come back into this session\n";
 /// What marks the plugin as ours.
 const MARK: &str = "Written by `teletap install hermes`";
 
@@ -125,9 +125,9 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
             ],
         );
     report.notes.push(if enabled {
-        "Hermes: the mesh plugin is in place and enabled; new Hermes sessions load it.".into()
+        "Hermes: the teletap plugin is in place and enabled; new Hermes sessions load it.".into()
     } else {
-        "Hermes: the mesh plugin is in place; turn it on with `hermes plugins enable mesh` and \
+        "Hermes: the teletap plugin is in place; turn it on with `hermes plugins enable teletap` and \
          `hermes config set plugins.entries.teletap.allow_gateway_injection true`."
             .into()
     });
@@ -169,7 +169,7 @@ fn parse_event(name: &str) -> Option<&'static str> {
 }
 
 /// The plugin's hook call: `{hook_event_name}` on stdin. Its inbox
-/// (`TELETAP_AGENT_INBOX`) reaches teletapd from the mesh CLI, not from here.
+/// (`TELETAP_AGENT_INBOX`) reaches teletapd from the teletap CLI, not from here.
 pub fn hook(name: &str, payload: &Value, _env: &BTreeMap<String, String>) -> HookParsed {
     // Cursor runs other agents' hooks with its own payload: only Cursor's
     // own hooks speak there.

@@ -47,7 +47,7 @@ const EVENTS: &[(&str, &str, u64, Option<&str>)] = &[
 ];
 
 /// What a session may run without asking: the agent-facing commands only and
-/// teletap's MCP tools (not `mcp__mesh-ext__*`: extension tools are asked about).
+/// teletap's MCP tools (not `mcp__teletap-ext__*`: extension tools are asked about).
 const PERMISSIONS: &[&str] = &[
     "Bash(teletap send:*)",
     "Bash(teletap inbox:*)",

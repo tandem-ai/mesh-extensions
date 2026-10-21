@@ -104,7 +104,7 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
     }
     report
         .notes
-        .push("Pi: the mesh extension is in place; new Pi sessions load it.".into());
+        .push("Pi: the teletap extension is in place; new Pi sessions load it.".into());
     Ok(report)
 }
 
@@ -157,7 +157,7 @@ fn parse_event(name: &str) -> Option<&'static str> {
 }
 
 /// The extension's hook call: `{hook_event_name, cwd?}` on stdin. Its inbox
-/// (`TELETAP_AGENT_INBOX`) reaches teletapd from the mesh CLI, not from here.
+/// (`TELETAP_AGENT_INBOX`) reaches teletapd from the teletap CLI, not from here.
 pub fn hook(name: &str, payload: &Value, _env: &BTreeMap<String, String>) -> HookParsed {
     // Cursor runs other agents' hooks with its own payload: only Cursor's
     // own hooks speak there.
