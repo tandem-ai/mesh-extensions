@@ -1,13 +1,13 @@
-//! `mesh/hermes`: Hermes Agent on mesh, as a provider extension. It used to
-//! be `mesh-agents/src/install/hermes.rs` and Hermes's part of `hooks.rs`
-//! (the "unknown agent" path) in mesh itself; it writes the same files, byte
+//! `teletap/hermes`: Hermes Agent on teletap, as a provider extension. It used to
+//! be `teletap-agents/src/install/hermes.rs` and Hermes's part of `hooks.rs`
+//! (the "unknown agent" path) in teletap itself; it writes the same files, byte
 //! for byte.
 //!
-//! - install: a plugin in `<hermes home>/plugins/mesh/` (`HERMES_HOME`, else
+//! - install: a plugin in `<hermes home>/plugins/teletap/` (`HERMES_HOME`, else
 //!   `~/.hermes`). Hermes loads a user plugin only once it is in
-//!   `plugins.enabled`, so install runs `hermes plugins enable mesh` when it
+//!   `plugins.enabled`, so install runs `hermes plugins enable teletap` when it
 //!   can. The plugin serves the session's inbox and runs
-//!   `mesh hook hermes <event>` itself (see `hermes-plugin.py`);
+//!   `teletap hook hermes <event>` itself (see `hermes-plugin.py`);
 //! - hooks: which session event each call is, and what it prints (raw text).
 //!
 //! Docs: <https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins>
@@ -19,15 +19,15 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 #[cfg(target_arch = "wasm32")]
 use extism_pdk::{FnResult, plugin_fn};
-#[cfg(target_arch = "wasm32")]
-use mesh_ext::Event;
-use mesh_ext::{HookParsed, HookRendered, InstallRequest, InstallResult, door};
 use serde_json::Value;
+#[cfg(target_arch = "wasm32")]
+use teletap_ext::Event;
+use teletap_ext::{HookParsed, HookRendered, InstallRequest, InstallResult, door};
 
 const PLUGIN: &str = include_str!("hermes-plugin.py");
-const MANIFEST: &str = "name: mesh\nversion: \"1.0\"\ndescription: Answers from your team (mesh) come back into this session\n";
+const MANIFEST: &str = "name: teletap\nversion: \"1.0\"\ndescription: Answers from your team (mesh) come back into this session\n";
 /// What marks the plugin as ours.
-const MARK: &str = "Written by `mesh install hermes`";
+const MARK: &str = "Written by `teletap install hermes`";
 
 // The export exists in the WASM build only: host-side unit tests can't link
 // Extism's imports, and test the logic below directly.
@@ -73,17 +73,17 @@ fn plugin_dir(req: &InstallRequest) -> String {
         .or(env)
         .map(|d| d.trim_end_matches('/').to_string())
         .unwrap_or_else(|| format!("{}/.hermes", req.home.trim_end_matches('/')));
-    format!("{home}/plugins/mesh")
+    format!("{home}/plugins/teletap")
 }
 
-/// The plugin with this install's `mesh` binary and `MESH_HOME`.
+/// The plugin with this install's `teletap` binary and `TELETAP_HOME`.
 fn plugin(req: &InstallRequest) -> String {
     let lit = |s: &str| serde_json::to_string(s).unwrap();
     PLUGIN
-        .replace("\"__MESH_BIN__\"", &lit(&req.mesh_bin))
+        .replace("\"__TELETAP_BIN__\"", &lit(&req.teletap_bin))
         .replace(
-            "\"__MESH_HOME__\"",
-            &lit(req.mesh_home.as_deref().unwrap_or_default()),
+            "\"__TELETAP_HOME__\"",
+            &lit(req.teletap_home.as_deref().unwrap_or_default()),
         )
 }
 
@@ -108,19 +108,19 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
         }
     }
     // Only when the plugin is new or changed: a user who turned it off in
-    // Hermes keeps it off until mesh itself changes it.
+    // Hermes keeps it off until teletap itself changes it.
     if report.files.is_empty() {
         return Ok(report);
     }
     // Hermes loads a user plugin once it's enabled; its TUI and desktop app
     // also need the plugin allowed to start turns.
-    let enabled = hermes(req, &["plugins", "enable", "mesh"])
+    let enabled = hermes(req, &["plugins", "enable", "teletap"])
         && hermes(
             req,
             &[
                 "config",
                 "set",
-                "plugins.entries.mesh.allow_gateway_injection",
+                "plugins.entries.teletap.allow_gateway_injection",
                 "true",
             ],
         );
@@ -128,7 +128,7 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
         "Hermes: the mesh plugin is in place and enabled; new Hermes sessions load it.".into()
     } else {
         "Hermes: the mesh plugin is in place; turn it on with `hermes plugins enable mesh` and \
-         `hermes config set plugins.entries.mesh.allow_gateway_injection true`."
+         `hermes config set plugins.entries.teletap.allow_gateway_injection true`."
             .into()
     });
     Ok(report)
@@ -141,15 +141,15 @@ fn uninstall(req: &InstallRequest) -> Result<InstallResult> {
     if door::read(&format!("{dir}/__init__.py"))?.is_some_and(|t| t.contains(MARK)) {
         door::remove(&dir)?;
         report.files.push(dir);
-        hermes(req, &["plugins", "disable", "mesh"]);
+        hermes(req, &["plugins", "disable", "teletap"]);
     }
     Ok(report)
 }
 
 // ---------------------------------------------------------------- hooks
 
-/// The event word (`mesh hook hermes <event>`) → session event. The plugin
-/// sends our short names; the rest is the table mesh's own hook took.
+/// The event word (`teletap hook hermes <event>`) → session event. The plugin
+/// sends our short names; the rest is the table teletap's own hook took.
 fn parse_event(name: &str) -> Option<&'static str> {
     let n: String = name
         .chars()
@@ -169,7 +169,7 @@ fn parse_event(name: &str) -> Option<&'static str> {
 }
 
 /// The plugin's hook call: `{hook_event_name}` on stdin. Its inbox
-/// (`MESH_AGENT_INBOX`) reaches meshd from the mesh CLI, not from here.
+/// (`TELETAP_AGENT_INBOX`) reaches teletapd from the mesh CLI, not from here.
 pub fn hook(name: &str, payload: &Value, _env: &BTreeMap<String, String>) -> HookParsed {
     // Cursor runs other agents' hooks with its own payload: only Cursor's
     // own hooks speak there.
@@ -214,7 +214,7 @@ mod tests {
     fn req(dir: Option<&str>, env: Option<&str>) -> InstallRequest {
         InstallRequest {
             config_dir: dir.map(str::to_string),
-            mesh_bin: "/Users/p/.local/bin/mesh".into(),
+            teletap_bin: "/Users/p/.local/bin/teletap".into(),
             home: "/Users/p".into(),
             env: env
                 .map(|e| BTreeMap::from([("HERMES_HOME".to_string(), e.to_string())]))
@@ -227,31 +227,31 @@ mod tests {
     fn plugin_dir_follows_hermes() {
         assert_eq!(
             plugin_dir(&req(None, None)),
-            "/Users/p/.hermes/plugins/mesh"
+            "/Users/p/.hermes/plugins/teletap"
         );
-        assert_eq!(plugin_dir(&req(None, Some("/h/"))), "/h/plugins/mesh");
+        assert_eq!(plugin_dir(&req(None, Some("/h/"))), "/h/plugins/teletap");
         assert_eq!(
             plugin_dir(&req(None, Some(""))),
-            "/Users/p/.hermes/plugins/mesh"
+            "/Users/p/.hermes/plugins/teletap"
         );
         assert_eq!(
             plugin_dir(&req(Some("/tmp/hermes"), Some("/h"))),
-            "/tmp/hermes/plugins/mesh"
+            "/tmp/hermes/plugins/teletap"
         );
     }
 
     #[test]
     fn plugin_fills_the_placeholders() {
         let mut r = req(None, None);
-        r.mesh_home = Some("/tmp/my mesh".into());
+        r.teletap_home = Some("/tmp/my mesh".into());
         let code = plugin(&r);
-        assert!(!code.contains("__MESH_"), "placeholders filled");
+        assert!(!code.contains("__TELETAP_"), "placeholders filled");
         assert!(!code.contains("pre_tool_call"), "no pre-tool hook");
         assert!(code.contains(MARK));
-        assert!(code.contains(r#"MESH = "/Users/p/.local/bin/mesh""#));
-        assert!(code.contains(r#"MESH_HOME_PIN = "/tmp/my mesh""#));
-        assert!(plugin(&req(None, None)).contains(r#"MESH_HOME_PIN = """#));
-        assert!(MANIFEST.contains("name: mesh"));
+        assert!(code.contains(r#"TELETAP = "/Users/p/.local/bin/teletap""#));
+        assert!(code.contains(r#"TELETAP_HOME_PIN = "/tmp/my mesh""#));
+        assert!(plugin(&req(None, None)).contains(r#"TELETAP_HOME_PIN = """#));
+        assert!(MANIFEST.contains("name: teletap"));
     }
 
     #[test]

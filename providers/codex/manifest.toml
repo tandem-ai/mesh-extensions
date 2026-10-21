@@ -1,9 +1,9 @@
-id = "mesh/codex"
+id = "teletap/codex"
 version = "0.3.0"
 api = "1.1"
 kind = "provider"
 scope = "personal"
-description = "Connects Codex to mesh: trusted hooks and the mesh and mesh-ext MCP servers."
+description = "Connects Codex to teletap: trusted hooks and the teletap and teletap-ext MCP servers."
 
 [provider]
 agent = "codex"

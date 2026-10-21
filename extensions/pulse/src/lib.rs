@@ -1,17 +1,17 @@
-//! `mesh/pulse`: an example org extension with a server part (E12).
+//! `teletap/pulse`: an example org extension with a server part (E12).
 //!
-//! - server part (the bot meshd mesh-control runs for it): every minute it
+//! - server part (the bot teletapd teletap-control runs for it): every minute it
 //!   counts a tick in `org/ticks`; a POST to its webhook URL is kept in
 //!   `org/last-webhook` and answered 202;
-//! - on people's devices: each change of its store is a line in meshd's log;
-//!   agents get a `ticks` tool (through `mesh-ext`) that reads the store.
+//! - on people's devices: each change of its store is a line in teletapd's log;
+//!   agents get a `ticks` tool (through `teletap-ext`) that reads the store.
 
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code, unused_imports))]
 
 #[cfg(target_arch = "wasm32")]
 use extism_pdk::*;
-use mesh_ext::{Event, ToolReply, WebhookReply, store};
 use serde_json::{Value, json};
+use teletap_ext::{Event, ToolReply, WebhookReply, store};
 
 #[cfg(target_arch = "wasm32")]
 #[plugin_fn]
@@ -24,7 +24,7 @@ pub fn handle(input: String) -> FnResult<String> {
         Event::Webhook { headers, body } => serde_json::to_value(webhook(&headers, body)?)?,
         Event::Tool { name, .. } if name == "ticks" => serde_json::to_value(ticks()?)?,
         Event::StoreChange { key, version, .. } => {
-            mesh_ext::log(&format!("pulse: {key} is at version {version}"));
+            teletap_ext::log(&format!("pulse: {key} is at version {version}"));
             Value::Null
         }
         _ => Value::Null,
@@ -33,7 +33,7 @@ pub fn handle(input: String) -> FnResult<String> {
 }
 
 /// One more tick; a write that lost a race to another tick tries again.
-fn tick() -> Result<(), mesh_ext::HostError> {
+fn tick() -> Result<(), teletap_ext::HostError> {
     for _ in 0..3 {
         let current = store::get("org/ticks")?;
         let (n, version) = current
@@ -50,7 +50,7 @@ fn tick() -> Result<(), mesh_ext::HostError> {
 fn webhook(
     headers: &std::collections::BTreeMap<String, String>,
     body: String,
-) -> Result<WebhookReply, mesh_ext::HostError> {
+) -> Result<WebhookReply, teletap_ext::HostError> {
     let kind = headers.get("content-type").cloned().unwrap_or_default();
     store::put(
         "org/last-webhook",
@@ -63,7 +63,7 @@ fn webhook(
     })
 }
 
-fn ticks() -> Result<ToolReply, mesh_ext::HostError> {
+fn ticks() -> Result<ToolReply, teletap_ext::HostError> {
     let n = store::get("org/ticks")?.map_or(0, |e| e.value.as_u64().unwrap_or(0));
     let hook = store::get("org/last-webhook")?.map(|e| e.value["body"].to_string());
     Ok(ToolReply {

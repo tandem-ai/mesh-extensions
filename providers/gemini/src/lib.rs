@@ -1,8 +1,8 @@
-//! `mesh/gemini`: Gemini CLI on mesh, as a provider extension. It used to be
-//! `mesh-agents/src/install/gemini.rs` and the Gemini parts of `hooks.rs` in
-//! mesh itself; it writes the same files, byte for byte.
+//! `teletap/gemini`: Gemini CLI on teletap, as a provider extension. It used to be
+//! `teletap-agents/src/install/gemini.rs` and the Gemini parts of `hooks.rs` in
+//! teletap itself; it writes the same files, byte for byte.
 //!
-//! - install: hooks and the MCP servers `mesh` and `mesh-ext` (extension
+//! - install: hooks and the MCP servers `teletap` and `teletap-ext` (extension
 //!   tools) in `<config dir>/settings.json` (`~/.gemini`, or
 //!   `$GEMINI_CLI_HOME/.gemini`);
 //! - hooks: which session event each Gemini hook is, and what it prints.
@@ -10,7 +10,7 @@
 //! Docs: <https://github.com/google-gemini/gemini-cli/blob/main/docs/hooks/reference.md>,
 //! <https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md>.
 //! Hook timeouts are in milliseconds; `trust: true` skips tool confirmations
-//! (on `mesh` only: extension tools are asked about on first use).
+//! (on `teletap` only: extension tools are asked about on first use).
 
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code, unused_imports))]
 
@@ -19,10 +19,10 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 #[cfg(target_arch = "wasm32")]
 use extism_pdk::{FnResult, plugin_fn};
-#[cfg(target_arch = "wasm32")]
-use mesh_ext::Event;
-use mesh_ext::{HookParsed, HookRendered, InstallRequest, InstallResult, config as json, door};
 use serde_json::{Value, json};
+#[cfg(target_arch = "wasm32")]
+use teletap_ext::Event;
+use teletap_ext::{HookParsed, HookRendered, InstallRequest, InstallResult, config as json, door};
 
 /// (Gemini event, our event name, timeout in milliseconds).
 const EVENTS: &[(&str, &str, u64)] = &[
@@ -32,10 +32,6 @@ const EVENTS: &[(&str, &str, u64)] = &[
     ("SessionEnd", "end", 5_000),
     ("AfterTool", "step", 10_000),
 ];
-
-/// Events older versions hooked: install drops our handler there (uninstall
-/// drops ours everywhere). `BeforeTool` ran the team-rule check.
-const OLD_EVENTS: &[&str] = &["BeforeTool"];
 
 // The export exists in the WASM build only: host-side unit tests can't link
 // Extism's imports, and test the logic below directly.
@@ -94,7 +90,7 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
     }
     report.notes.push(
         "Gemini CLI: hooks (SessionStart, BeforeAgent, AfterAgent, SessionEnd, AfterTool) and the \
-         `mesh` and `mesh-ext` MCP servers are set; restart Gemini to load them."
+         `teletap` and `teletap-ext` MCP servers are set; restart Gemini to load them."
             .into(),
     );
     Ok(report)
@@ -120,14 +116,13 @@ fn add(settings: &mut Value, req: &InstallRequest) -> Result<()> {
         let hooks = json::object_at(settings, "hooks")?;
         for (event, ours, timeout) in EVENTS {
             let handler = json!({
-                "name": format!("mesh-{ours}"),
+                "name": format!("teletap-{ours}"),
                 "type": "command",
                 "command": json::hook_command(req, "gemini", ours),
                 "timeout": timeout,
             });
             json::set_hook(hooks, event, "gemini", handler, None)?;
         }
-        json::remove_old_hooks(hooks, OLD_EVENTS, "gemini");
     }
     let servers = json::object_at(settings, "mcpServers")?;
     for (name, args, trusted) in json::MCP_SERVERS {
@@ -221,11 +216,11 @@ fn additional_context(event: &str, text: &str) -> String {
 mod tests {
     use super::*;
 
-    const CMD: &str = "/usr/local/bin/mesh hook";
+    const CMD: &str = "/usr/local/bin/teletap hook";
 
     fn opts() -> InstallRequest {
         InstallRequest {
-            mesh_bin: "/usr/local/bin/mesh".into(),
+            teletap_bin: "/usr/local/bin/teletap".into(),
             home: "/Users/p".into(),
             ..InstallRequest::default()
         }
@@ -239,20 +234,20 @@ mod tests {
         assert_eq!(s["theme"], "Dracula");
         for (event, ours, _) in EVENTS {
             let h = &s["hooks"][event][0]["hooks"][0];
-            assert_eq!(h["name"], format!("mesh-{ours}"), "{event}");
+            assert_eq!(h["name"], format!("teletap-{ours}"), "{event}");
             assert_eq!(h["command"], format!("{CMD} gemini {ours}"), "{event}");
             assert!(h["timeout"].as_u64().unwrap() >= 1000, "ms");
         }
         assert_eq!(
-            s["mcpServers"]["mesh"],
-            json!({"command": "/usr/local/bin/mesh", "args": ["mcp"], "trust": true})
+            s["mcpServers"]["teletap"],
+            json!({"command": "/usr/local/bin/teletap", "args": ["mcp"], "trust": true})
         );
         // Extension tools are asked about: no `trust`.
         assert_eq!(
-            s["mcpServers"]["mesh-ext"],
-            json!({"command": "/usr/local/bin/mesh", "args": ["mcp", "--ext"]})
+            s["mcpServers"]["teletap-ext"],
+            json!({"command": "/usr/local/bin/teletap", "args": ["mcp", "--ext"]})
         );
-        assert!(s["mcpServers"]["mesh-ext"].get("trust").is_none());
+        assert!(s["mcpServers"]["teletap-ext"].get("trust").is_none());
         assert_eq!(s["mcpServers"]["gh"]["command"], "gh-mcp");
 
         let once = s.clone();
@@ -265,39 +260,23 @@ mod tests {
     #[test]
     fn mesh_ext_follows_the_mesh_binary() {
         let mut r = opts();
-        r.mesh_home = Some("/tmp/h".into());
+        r.teletap_home = Some("/tmp/h".into());
         let mut s = json!({"mcpServers": {
-            "mesh-ext": {"command": "/old/mesh", "args": ["mcp", "--ext"]},
+            "teletap-ext": {"command": "/old/teletap", "args": ["mcp", "--ext"]},
             "ext": {"command": "/bin/other"},
         }});
         add(&mut s, &r).unwrap();
         assert_eq!(
-            s["mcpServers"]["mesh-ext"],
-            json!({"command": "/usr/local/bin/mesh", "args": ["mcp", "--ext"], "env": {"MESH_HOME": "/tmp/h"}})
+            s["mcpServers"]["teletap-ext"],
+            json!({"command": "/usr/local/bin/teletap", "args": ["mcp", "--ext"], "env": {"TELETAP_HOME": "/tmp/h"}})
         );
         remove(&mut s);
         assert_eq!(s["mcpServers"], json!({"ext": {"command": "/bin/other"}}));
-        // Someone else's `mesh-ext` server stays.
-        let mut theirs = json!({"mcpServers": {"mesh-ext": {"command": "/bin/meshy"}}});
+        // Someone else's `teletap-ext` server stays.
+        let mut theirs = json!({"mcpServers": {"teletap-ext": {"command": "/bin/meshy"}}});
         let before = theirs.clone();
         remove(&mut theirs);
         assert_eq!(theirs, before);
-    }
-
-    /// An older mesh hooked `BeforeTool` (team rules).
-    #[test]
-    fn drops_the_old_before_tool_hook() {
-        let theirs = json!({"hooks": [{"type": "command", "command": "my-guard.sh"}]});
-        let old = json!({"hooks": {"BeforeTool": [
-            {"hooks": [{"name": "mesh-tool", "type": "command", "command": format!("{CMD} gemini tool"), "timeout": 10000}]},
-            theirs,
-        ]}});
-        let mut s = old.clone();
-        add(&mut s, &opts()).unwrap();
-        assert_eq!(s["hooks"]["BeforeTool"], json!([theirs]));
-        let mut s = old.clone();
-        remove(&mut s);
-        assert_eq!(s, json!({"hooks": {"BeforeTool": [theirs]}}));
     }
 
     #[test]

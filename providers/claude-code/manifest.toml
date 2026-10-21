@@ -1,9 +1,9 @@
-id = "mesh/claude-code"
+id = "teletap/claude-code"
 version = "0.3.0"
 api = "1.3"
 kind = "provider"
 scope = "personal"
-description = "Connects Claude Code to mesh: hooks, the mesh and mesh-ext MCP servers and permissions."
+description = "Connects Claude Code to teletap: hooks, the teletap and teletap-ext MCP servers and permissions."
 
 [provider]
 agent = "claude"
@@ -21,10 +21,10 @@ commands = ["claude"]
 # The user-scope MCP server goes through Claude's own CLI when no config
 # dir is given: a running Claude rewrites .claude.json all the time.
 exec = [
-  "claude mcp add-json --scope user mesh",
-  "claude mcp remove --scope user mesh",
-  "claude mcp add-json --scope user mesh-ext",
-  "claude mcp remove --scope user mesh-ext",
+  "claude mcp add-json --scope user teletap",
+  "claude mcp remove --scope user teletap",
+  "claude mcp add-json --scope user teletap-ext",
+  "claude mcp remove --scope user teletap-ext",
 ]
 fs_write = [
   "~/.claude/settings.json",

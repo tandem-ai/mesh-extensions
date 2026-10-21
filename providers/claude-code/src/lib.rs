@@ -1,15 +1,15 @@
-//! `mesh/claude-code`: Claude Code on mesh, as a provider extension. It used
-//! to be `mesh-agents/src/install/claude.rs` and the Claude parts of
-//! `hooks.rs` in mesh itself; it writes the same files, byte for byte.
+//! `teletap/claude-code`: Claude Code on teletap, as a provider extension. It used
+//! to be `teletap-agents/src/install/claude.rs` and the Claude parts of
+//! `hooks.rs` in teletap itself; it writes the same files, byte for byte.
 //!
 //! - install: hooks and permissions in `<config dir>/settings.json`, the MCP
-//!   servers `mesh` and `mesh-ext` (extension tools) in the user-scope
+//!   servers `teletap` and `teletap-ext` (extension tools) in the user-scope
 //!   `mcpServers` of `.claude.json` (through `claude mcp …` when no config
 //!   dir is given and `claude` is on PATH: a running Claude rewrites that
-//!   file all the time). Only `mesh`'s tools are allowed without asking;
+//!   file all the time). Only `teletap`'s tools are allowed without asking;
 //!   extension tools are asked about on first use;
 //! - launch (a cloud agent's run): the same servers in the run's
-//!   `mcp.json`, given with `--mcp-config`, and `mesh`'s tools allowed with
+//!   `mcp.json`, given with `--mcp-config`, and `teletap`'s tools allowed with
 //!   `--allowedTools`; nothing in `~/.claude`. Both flags take several
 //!   values, so each is passed as `--flag=value`: the person's prompt that
 //!   follows stays a prompt;
@@ -24,45 +24,39 @@ use std::collections::BTreeMap;
 use anyhow::{Result, bail};
 #[cfg(target_arch = "wasm32")]
 use extism_pdk::{FnResult, plugin_fn};
+use serde_json::{Value, json};
 #[cfg(target_arch = "wasm32")]
-use mesh_ext::Event;
-use mesh_ext::{
+use teletap_ext::Event;
+use teletap_ext::{
     HookParsed, HookRendered, Inbox, InstallRequest, InstallResult, LaunchRequest, LaunchResult,
     config as json, door,
 };
-use serde_json::{Value, json};
 
 /// (Claude event, our event name, timeout in seconds, matcher).
 ///
 /// `Stop` doesn't run when the user interrupts a turn; the `idle_prompt`
-/// notification (the prompt sat idle for a while) tells meshd it is idle again.
+/// notification (the prompt sat idle for a while) tells teletapd it is idle again.
 const EVENTS: &[(&str, &str, u64, Option<&str>)] = &[
     ("SessionStart", "start", 10, None),
     ("UserPromptSubmit", "prompt", 10, None),
     ("Stop", "stop", 10, None),
     ("Notification", "idle", 5, Some("idle_prompt")),
-    // Prints nothing (the person decides); tells meshd not to type in now.
+    // Prints nothing (the person decides); tells teletapd not to type in now.
     ("PermissionRequest", "blocked", 5, None),
     ("SessionEnd", "end", 5, None),
 ];
 
-/// Events older versions hooked: install drops our handler there.
-const OLD_EVENTS: &[&str] = &["PreToolUse"];
-
 /// What a session may run without asking: the agent-facing commands only and
-/// mesh's MCP tools (not `mcp__mesh-ext__*`: extension tools are asked about).
+/// teletap's MCP tools (not `mcp__mesh-ext__*`: extension tools are asked about).
 const PERMISSIONS: &[&str] = &[
-    "Bash(mesh send:*)",
-    "Bash(mesh inbox:*)",
-    "Bash(mesh who:*)",
-    "Bash(mesh show:*)",
-    "Bash(mesh wait:*)",
-    "Bash(mesh sessions:*)",
-    "mcp__mesh__*",
+    "Bash(teletap send:*)",
+    "Bash(teletap inbox:*)",
+    "Bash(teletap who:*)",
+    "Bash(teletap show:*)",
+    "Bash(teletap wait:*)",
+    "Bash(teletap sessions:*)",
+    "mcp__teletap__*",
 ];
-
-/// The broad permission older versions wrote; install and uninstall drop it.
-const OLD_PERMISSIONS: &[&str] = &["Bash(mesh:*)"];
 
 // The export exists in the WASM build only: host-side unit tests can't link
 // Extism's imports, and test the logic below directly.
@@ -170,7 +164,6 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
             });
             json::set_hook(hooks, event, "claude", handler, *matcher)?;
         }
-        json::remove_old_hooks(hooks, OLD_EVENTS, "claude");
     }
     {
         let perms = json::object_at(&mut settings, "permissions")?;
@@ -181,7 +174,6 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
         else {
             bail!("permissions.allow is not an array");
         };
-        allow.retain(|v| !OLD_PERMISSIONS.iter().any(|p| v == p));
         for p in PERMISSIONS {
             if !allow.iter().any(|v| v == p) {
                 allow.push(Value::String(p.to_string()));
@@ -211,7 +203,7 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
     report.notes.push(
         "Claude Code: hooks (SessionStart, UserPromptSubmit, Stop, Notification, \
          PermissionRequest, SessionEnd), \
-         permissions and the `mesh` and `mesh-ext` MCP servers are set; new sessions \
+         permissions and the `teletap` and `teletap-ext` MCP servers are set; new sessions \
          pick them up."
             .into(),
     );
@@ -230,7 +222,7 @@ fn mcp_entries(req: &InstallRequest) -> Vec<(&'static str, Value)> {
 }
 
 /// A cloud agent's run: our servers in `<run>/mcp.json` (the door's
-/// `{run_dir}/`), mesh's tools allowed.
+/// `{run_dir}/`), teletap's tools allowed.
 fn launch(req: &LaunchRequest) -> Result<LaunchResult> {
     let (path, text) = launch_config(req);
     door::write(&path, &text)?;
@@ -251,7 +243,7 @@ fn launch_config(req: &LaunchRequest) -> (String, String) {
 fn launch_args(path: &str) -> Vec<String> {
     vec![
         format!("--mcp-config={path}"),
-        "--allowedTools=mcp__mesh__*".into(),
+        "--allowedTools=mcp__teletap__*".into(),
     ]
 }
 
@@ -298,7 +290,7 @@ fn uninstall(req: &InstallRequest) -> Result<InstallResult> {
             .and_then(Value::as_object_mut)
         {
             if let Some(allow) = perms.get_mut("allow").and_then(Value::as_array_mut) {
-                allow.retain(|v| !PERMISSIONS.iter().chain(OLD_PERMISSIONS).any(|p| v == p));
+                allow.retain(|v| !PERMISSIONS.iter().any(|p| v == p));
                 if allow.is_empty() {
                     perms.remove("allow");
                 }
@@ -314,7 +306,7 @@ fn uninstall(req: &InstallRequest) -> Result<InstallResult> {
     if door::read(&f.claude_json)?.is_some() {
         let mut cj = json::read(&f.claude_json)?;
         if via_cli(req)? {
-            // Our entries only: a user's own `mesh` server stays.
+            // Our entries only: a user's own `teletap` server stays.
             let mut removed = false;
             for (name, ..) in json::MCP_SERVERS {
                 if json::remove_mcp_server(&mut cj, name) {
@@ -375,7 +367,7 @@ pub fn hook(name: &str, payload: &Value, env: &BTreeMap<String, String>) -> Hook
             .get("cwd")
             .and_then(Value::as_str)
             .map(str::to_string),
-        // Claude Code's own cross-session socket: meshd posts answers there.
+        // Claude Code's own cross-session socket: teletapd posts answers there.
         inbox: var("CLAUDE_CODE_MESSAGING_SOCKET").map(|socket| Inbox {
             socket,
             token: var("CLAUDE_CODE_MESSAGING_TOKEN"),
@@ -457,7 +449,7 @@ mod tests {
 
     fn opts() -> InstallRequest {
         InstallRequest {
-            mesh_bin: "/usr/local/bin/mesh".into(),
+            teletap_bin: "/usr/local/bin/teletap".into(),
             home: "/Users/p".into(),
             ..InstallRequest::default()
         }
@@ -466,30 +458,33 @@ mod tests {
     #[test]
     fn a_launch_brings_the_servers_and_touches_no_config() {
         let req = LaunchRequest {
-            dir: "/w/.mesh/claude/".into(),
-            mesh_bin: "/usr/local/bin/mesh".into(),
-            mesh_home: "/tmp/mesh-x".into(),
+            dir: "/w/.teletap/claude/".into(),
+            teletap_bin: "/usr/local/bin/teletap".into(),
+            teletap_home: "/tmp/teletap-x".into(),
         };
         let (path, text) = launch_config(&req);
-        assert_eq!(path, "/w/.mesh/claude/mcp.json");
+        assert_eq!(path, "/w/.teletap/claude/mcp.json");
         let cfg: Value = serde_json::from_str(&text).unwrap();
-        let env = json!({"MESH_HOME": "/tmp/mesh-x"});
+        let env = json!({"TELETAP_HOME": "/tmp/teletap-x"});
         assert_eq!(
             cfg,
             json!({"mcpServers": {
-                "mesh": {"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp"], "env": env},
-                "mesh-ext": {"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp", "--ext"], "env": env},
+                "teletap": {"type": "stdio", "command": "/usr/local/bin/teletap", "args": ["mcp"], "env": env},
+                "teletap-ext": {"type": "stdio", "command": "/usr/local/bin/teletap", "args": ["mcp", "--ext"], "env": env},
             }})
         );
         // One value each: a prompt after them isn't read as a config file.
         assert_eq!(
             launch_args(&path),
             [
-                "--mcp-config=/w/.mesh/claude/mcp.json",
-                "--allowedTools=mcp__mesh__*"
+                "--mcp-config=/w/.teletap/claude/mcp.json",
+                "--allowedTools=mcp__teletap__*"
             ]
         );
-        assert!(PERMISSIONS.contains(&"mcp__mesh__*"), "the install's own");
+        assert!(
+            PERMISSIONS.contains(&"mcp__teletap__*"),
+            "the install's own"
+        );
     }
 
     #[test]
@@ -498,12 +493,12 @@ mod tests {
         let mut cj = original.clone();
         add_mcp(&mut cj, &opts()).unwrap();
         assert_eq!(
-            cj["mcpServers"]["mesh"],
-            json!({"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp"]})
+            cj["mcpServers"]["teletap"],
+            json!({"type": "stdio", "command": "/usr/local/bin/teletap", "args": ["mcp"]})
         );
         assert_eq!(
-            cj["mcpServers"]["mesh-ext"],
-            json!({"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp", "--ext"]})
+            cj["mcpServers"]["teletap-ext"],
+            json!({"type": "stdio", "command": "/usr/local/bin/teletap", "args": ["mcp", "--ext"]})
         );
         let once = cj.clone();
         add_mcp(&mut cj, &opts()).unwrap();
@@ -521,30 +516,38 @@ mod tests {
                 "--scope",
                 "user",
                 name,
-                &format!(r#"{{"type":"stdio","command":"/usr/local/bin/mesh","args":[{args}]}}"#),
+                &format!(
+                    r#"{{"type":"stdio","command":"/usr/local/bin/teletap","args":[{args}]}}"#
+                ),
             ])
         };
         let remove = |name: &str| argv(&["mcp", "remove", "--scope", "user", name]);
         let r = opts();
         assert_eq!(
             cli_installs(None, &r),
-            [add("mesh", r#""mcp""#), add("mesh-ext", r#""mcp","--ext""#)]
+            [
+                add("teletap", r#""mcp""#),
+                add("teletap-ext", r#""mcp","--ext""#)
+            ]
         );
         let mut cj = json!({});
         add_mcp(&mut cj, &r).unwrap();
         assert!(cli_installs(Some(&cj), &r).is_empty(), "idempotent");
-        // An entry for an old mesh binary is replaced.
-        cj["mcpServers"]["mesh-ext"]["command"] = json!("/old/mesh");
+        // An entry for an old teletap binary is replaced.
+        cj["mcpServers"]["teletap-ext"]["command"] = json!("/old/teletap");
         assert_eq!(
             cli_installs(Some(&cj), &r),
-            [remove("mesh-ext"), add("mesh-ext", r#""mcp","--ext""#)]
+            [
+                remove("teletap-ext"),
+                add("teletap-ext", r#""mcp","--ext""#)
+            ]
         );
     }
 
     #[test]
     fn extension_tools_are_asked_about() {
-        assert!(PERMISSIONS.contains(&"mcp__mesh__*"));
-        assert!(!PERMISSIONS.iter().any(|p| p.contains("mesh-ext")));
+        assert!(PERMISSIONS.contains(&"mcp__teletap__*"));
+        assert!(!PERMISSIONS.iter().any(|p| p.contains("teletap-ext")));
     }
 
     #[test]

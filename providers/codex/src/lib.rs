@@ -1,8 +1,8 @@
-//! `mesh/codex`: Codex on mesh, as a provider extension. It used to be
-//! `mesh-agents/src/install/codex.rs` and the Codex parts of `hooks.rs` in
-//! mesh itself; it writes the same files, byte for byte.
+//! `teletap/codex`: Codex on teletap, as a provider extension. It used to be
+//! `teletap-agents/src/install/codex.rs` and the Codex parts of `hooks.rs` in
+//! teletap itself; it writes the same files, byte for byte.
 //!
-//! - install: hooks and the MCP servers `mesh` and `mesh-ext` (extension
+//! - install: hooks and the MCP servers `teletap` and `teletap-ext` (extension
 //!   tools, asked about on first use) in `$CODEX_HOME/config.toml` (default
 //!   `~/.codex`), edited with `toml_edit` so the user's comments and layout
 //!   stay;
@@ -11,19 +11,19 @@
 //! - hooks: which session event each Codex hook is, and what it prints.
 //!
 //! ```toml
-//! [mcp_servers.mesh]
-//! command = "/…/mesh"
+//! [mcp_servers.teletap]
+//! command = "/…/teletap"
 //! args = ["mcp"]
 //! default_tools_approval_mode = "approve"
 //!
-//! [mcp_servers.mesh-ext]
-//! command = "/…/mesh"
+//! [mcp_servers.teletap-ext]
+//! command = "/…/teletap"
 //! args = ["mcp", "--ext"]
 //!
 //! [[hooks.Stop]]
 //! [[hooks.Stop.hooks]]
 //! type = "command"
-//! command = "/…/mesh hook codex stop"
+//! command = "/…/teletap hook codex stop"
 //! timeout = 10
 //!
 //! [hooks.state."/…/.codex/config.toml:stop:0:0"]
@@ -34,7 +34,7 @@
 //! `hooks.state` entry keyed `<real path of config.toml>:<event>:<group>:<handler>`
 //! must carry the hook's hash (`codex-rs/hooks/src/engine/discovery.rs`,
 //! `hook_hash` + `codex-rs/config/src/fingerprint.rs`, `version_for_toml`).
-//! `mesh install codex` is the user's consent, so it records that trust
+//! `teletap install codex` is the user's consent, so it records that trust
 //! for the hooks it writes, and only for those.
 
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code, unused_imports))]
@@ -44,14 +44,14 @@ use std::collections::BTreeMap;
 use anyhow::{Context, Result, bail};
 #[cfg(target_arch = "wasm32")]
 use extism_pdk::{FnResult, plugin_fn};
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 #[cfg(target_arch = "wasm32")]
-use mesh_ext::Event;
-use mesh_ext::{
+use teletap_ext::Event;
+use teletap_ext::{
     HookParsed, HookRendered, InstallRequest, InstallResult, LaunchRequest, LaunchResult, config,
     door,
 };
-use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use toml_edit::{ArrayOfTables, DocumentMut, InlineTable, Item, Table, value};
 
 /// (Codex event, trust-key label, our event name, timeout in seconds).
@@ -64,7 +64,7 @@ const EVENTS: &[(&str, &str, &str, u64)] = &[
     ("Interrupt", "interrupt", "idle", 3),
     ("SessionEnd", "session_end", "end", 3),
     ("PostToolUse", "post_tool_use", "step", 10),
-    // Prints nothing (the person decides); tells meshd not to type in now.
+    // Prints nothing (the person decides); tells teletapd not to type in now.
     ("PermissionRequest", "permission_request", "blocked", 5),
 ];
 
@@ -141,7 +141,7 @@ pub fn trusted_hash(label: &str, command: &str, timeout_sec: u64) -> String {
 }
 
 /// `dir` joined with `name` the way `PathBuf::join` does it, so the paths
-/// mesh reports are the ones it used to.
+/// teletap reports are the ones it used to.
 fn join(dir: &str, name: &str) -> String {
     if dir.ends_with('/') {
         format!("{dir}{name}")
@@ -204,7 +204,7 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
     }
     report.notes.push(
         "Codex: hooks (SessionStart, UserPromptSubmit, Stop, Interrupt, SessionEnd, \
-         PostToolUse, PermissionRequest) and the `mesh` and `mesh-ext` MCP \
+         PostToolUse, PermissionRequest) and the `teletap` and `teletap-ext` MCP \
          servers are set, and the hooks are marked trusted; new sessions pick them up."
             .into(),
     );
@@ -221,9 +221,9 @@ fn launch_args(req: &LaunchRequest) -> Vec<String> {
         let key = format!("mcp_servers.{name}");
         let args: toml_edit::Array = args.iter().copied().collect();
         let mut env = InlineTable::new();
-        env.insert("MESH_HOME", req.mesh_home.as_str().into());
+        env.insert("TELETAP_HOME", req.teletap_home.as_str().into());
         let mut set = vec![
-            format!("{key}.command={}", s(&req.mesh_bin)),
+            format!("{key}.command={}", s(&req.teletap_bin)),
             format!("{key}.args={args}"),
             format!("{key}.env={env}"),
         ];
@@ -249,12 +249,12 @@ fn install_doc(doc: &mut DocumentMut, req: &InstallRequest, path: &str, src: &st
         let servers = table_at(root, "mcp_servers")?;
         for (name, args, trusted) in config::MCP_SERVERS {
             let mut mesh = Table::new();
-            mesh.insert("command", value(req.mesh_bin.clone()));
+            mesh.insert("command", value(req.teletap_bin.clone()));
             let args: toml_edit::Array = args.iter().copied().collect();
             mesh.insert("args", value(args));
-            if let Some(home) = &req.mesh_home {
+            if let Some(home) = &req.teletap_home {
                 let mut env = InlineTable::new();
-                env.insert("MESH_HOME", home.clone().into());
+                env.insert("TELETAP_HOME", home.clone().into());
                 mesh.insert("env", value(env));
             }
             if *trusted {
@@ -263,7 +263,7 @@ fn install_doc(doc: &mut DocumentMut, req: &InstallRequest, path: &str, src: &st
             match servers.get_mut(name).and_then(Item::as_table_mut) {
                 // Keep the table where it is (and any keys the user added).
                 Some(existing) => {
-                    if req.mesh_home.is_none() {
+                    if req.teletap_home.is_none() {
                         existing.remove("env");
                     }
                     for (k, v) in mesh.iter() {
@@ -375,7 +375,7 @@ fn uninstall_doc(doc: &mut DocumentMut, src: &str) {
                 .get(name)
                 .and_then(|m| m.get("command"))
                 .and_then(Item::as_str)
-                .is_some_and(|c| c.rsplit('/').next() == Some("mesh"));
+                .is_some_and(|c| c.rsplit('/').next() == Some("teletap"));
             if ours {
                 servers.remove(name);
             }
@@ -480,7 +480,7 @@ fn rekey_state(state: &mut Table, src: &str, removed: &[(&str, Vec<usize>)]) {
 // ---------------------------------------------------------------- hooks
 
 /// Our event word (as installed) or the hook's own name → session event.
-/// The same table mesh's built-in hook read, for every agent.
+/// The same table teletap's built-in hook read, for every agent.
 fn parse_event(name: &str) -> Option<&'static str> {
     let n: String = name
         .chars()
@@ -518,8 +518,8 @@ pub fn hook(name: &str, payload: &Value, _env: &BTreeMap<String, String>) -> Hoo
         .map(str::to_string);
     HookParsed {
         kind: Some(kind.into()),
-        // A Codex chat is its thread (`codex-<thread>`), as `mesh send` from
-        // its shell sees it through CODEX_THREAD_ID; the codex process meshd
+        // A Codex chat is its thread (`codex-<thread>`), as `teletap send` from
+        // its shell sees it through CODEX_THREAD_ID; the codex process teletapd
         // finds (none under Codex's shared server) only tells when it ends.
         key: session_id.as_ref().map(|thread| format!("codex-{thread}")),
         session_id,
@@ -565,10 +565,10 @@ mod tests {
 
     const SRC: &str = "/real/.codex/config.toml";
 
-    fn req(mesh_home: Option<&str>) -> InstallRequest {
+    fn req(teletap_home: Option<&str>) -> InstallRequest {
         InstallRequest {
-            mesh_bin: "/a b/mesh".into(),
-            mesh_home: mesh_home.map(str::to_string),
+            teletap_bin: "/a b/teletap".into(),
+            teletap_home: teletap_home.map(str::to_string),
             home: "/Users/p".into(),
             ..InstallRequest::default()
         }
@@ -589,9 +589,9 @@ mod tests {
     #[test]
     fn a_launch_passes_the_servers_as_overrides() {
         let req = LaunchRequest {
-            dir: "/w/.mesh/codex".into(),
-            mesh_bin: "/a b/mesh".into(),
-            mesh_home: "/tmp/h".into(),
+            dir: "/w/.teletap/codex".into(),
+            teletap_bin: "/a b/teletap".into(),
+            teletap_home: "/tmp/h".into(),
         };
         let args = launch_args(&req);
         let sets: Vec<&str> = args.iter().skip(1).step_by(2).map(String::as_str).collect();
@@ -599,13 +599,13 @@ mod tests {
         assert_eq!(
             sets,
             [
-                r#"mcp_servers.mesh.command="/a b/mesh""#,
-                r#"mcp_servers.mesh.args=["mcp"]"#,
-                r#"mcp_servers.mesh.env={ MESH_HOME = "/tmp/h" }"#,
-                r#"mcp_servers.mesh.default_tools_approval_mode="approve""#,
-                r#"mcp_servers.mesh-ext.command="/a b/mesh""#,
-                r#"mcp_servers.mesh-ext.args=["mcp", "--ext"]"#,
-                r#"mcp_servers.mesh-ext.env={ MESH_HOME = "/tmp/h" }"#,
+                r#"mcp_servers.teletap.command="/a b/teletap""#,
+                r#"mcp_servers.teletap.args=["mcp"]"#,
+                r#"mcp_servers.teletap.env={ TELETAP_HOME = "/tmp/h" }"#,
+                r#"mcp_servers.teletap.default_tools_approval_mode="approve""#,
+                r#"mcp_servers.teletap-ext.command="/a b/teletap""#,
+                r#"mcp_servers.teletap-ext.args=["mcp", "--ext"]"#,
+                r#"mcp_servers.teletap-ext.env={ TELETAP_HOME = "/tmp/h" }"#,
             ]
         );
         // Each override is the TOML the install writes.
@@ -619,8 +619,12 @@ mod tests {
     fn hash_matches_codex() {
         // Computed with Codex's algorithm (sorted compact JSON, sha256).
         assert_eq!(
-            trusted_hash("stop", "MESH_HOME=/tmp/h '/a b/mesh' hook codex stop", 10),
-            "sha256:02911bcc39ab4b939d35d4cbbb0f5781dc07a39441efaebadaab2acf2b8ca612"
+            trusted_hash(
+                "stop",
+                "TELETAP_HOME=/tmp/h '/a b/teletap' hook codex stop",
+                10
+            ),
+            "sha256:8c660001ac0968b571b01dd345a589558a3f8cfca442e238cf458f9bada6005f"
         );
     }
 
@@ -641,24 +645,24 @@ mod tests {
     fn install_writes_hooks_trust_and_mcp() {
         let r = req(Some("/tmp/h"));
         let out = installed("", &r);
-        // Extension tools are asked about: no approval mode on `mesh-ext`.
+        // Extension tools are asked about: no approval mode on `teletap-ext`.
         assert!(out.starts_with(
-            "[mcp_servers.mesh]\ncommand = \"/a b/mesh\"\nargs = [\"mcp\"]\n\
-             env = { MESH_HOME = \"/tmp/h\" }\ndefault_tools_approval_mode = \"approve\"\n\n\
-             [mcp_servers.mesh-ext]\ncommand = \"/a b/mesh\"\nargs = [\"mcp\", \"--ext\"]\n\
-             env = { MESH_HOME = \"/tmp/h\" }\n\n"
+            "[mcp_servers.teletap]\ncommand = \"/a b/teletap\"\nargs = [\"mcp\"]\n\
+             env = { TELETAP_HOME = \"/tmp/h\" }\ndefault_tools_approval_mode = \"approve\"\n\n\
+             [mcp_servers.teletap-ext]\ncommand = \"/a b/teletap\"\nargs = [\"mcp\", \"--ext\"]\n\
+             env = { TELETAP_HOME = \"/tmp/h\" }\n\n"
         ));
         assert!(out.contains(
             "[[hooks.Stop]]\n\n[[hooks.Stop.hooks]]\ntype = \"command\"\n\
-             command = \"MESH_HOME=/tmp/h '/a b/mesh' hook codex stop\"\ntimeout = 10\n"
+             command = \"TELETAP_HOME=/tmp/h '/a b/teletap' hook codex stop\"\ntimeout = 10\n"
         ));
         let stop = format!(
-            "[hooks.state.\"{SRC}:stop:0:0\"]\ntrusted_hash = \"sha256:02911bcc39ab4b939d35d4cbbb0f5781dc07a39441efaebadaab2acf2b8ca612\"\n"
+            "[hooks.state.\"{SRC}:stop:0:0\"]\ntrusted_hash = \"sha256:8c660001ac0968b571b01dd345a589558a3f8cfca442e238cf458f9bada6005f\"\n"
         );
         assert!(out.contains(&stop), "{out}");
         let doc = parse_doc(&out, "c.toml").unwrap();
         assert!(
-            doc["mcp_servers"]["mesh-ext"]
+            doc["mcp_servers"]["teletap-ext"]
                 .get("default_tools_approval_mode")
                 .is_none()
         );
@@ -673,11 +677,11 @@ mod tests {
     #[test]
     fn install_keeps_the_users_config_and_drops_old_hooks() {
         let before = "# mine\nmodel = \"o3\"\n\n\
-            [mcp_servers.mesh]\ncommand = \"/old/mesh\"\nargs = [\"mcp\"]\n\
-            env = { MESH_HOME = \"/old\" }\nstartup_timeout_sec = 20\n\n\
-            [mcp_servers.mesh-ext]\ncommand = \"/old/mesh\"\nargs = [\"mcp\", \"--ext\"]\n\n\
+            [mcp_servers.teletap]\ncommand = \"/old/teletap\"\nargs = [\"mcp\"]\n\
+            env = { TELETAP_HOME = \"/old\" }\nstartup_timeout_sec = 20\n\n\
+            [mcp_servers.teletap-ext]\ncommand = \"/old/teletap\"\nargs = [\"mcp\", \"--ext\"]\n\n\
             [[hooks.PreToolUse]]\n[[hooks.PreToolUse.hooks]]\ntype = \"command\"\n\
-            command = \"mesh hook codex tool\"\n\n\
+            command = \"teletap hook codex tool\"\n\n\
             [[hooks.PreToolUse]]\n[[hooks.PreToolUse.hooks]]\ntype = \"command\"\n\
             command = \"lint\"\n\n\
             [[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = \"command\"\ncommand = \"notify\"\n\n\
@@ -687,11 +691,11 @@ mod tests {
         assert!(out.starts_with("# mine\nmodel = \"o3\"\n"));
         // Our table stays where it was, with the user's key; no env without a home.
         assert!(out.contains(
-            "[mcp_servers.mesh]\ncommand = \"/a b/mesh\"\nargs = [\"mcp\"]\n\
+            "[mcp_servers.teletap]\ncommand = \"/a b/teletap\"\nargs = [\"mcp\"]\n\
              startup_timeout_sec = 20\ndefault_tools_approval_mode = \"approve\"\n\n\
-             [mcp_servers.mesh-ext]\ncommand = \"/a b/mesh\"\nargs = [\"mcp\", \"--ext\"]\n\n"
+             [mcp_servers.teletap-ext]\ncommand = \"/a b/teletap\"\nargs = [\"mcp\", \"--ext\"]\n\n"
         ));
-        assert!(!out.contains("/old/mesh"));
+        assert!(!out.contains("/old/teletap"));
         assert!(!out.contains("hook codex tool"));
         assert!(out.contains("command = \"lint\""));
         // The user's PreToolUse group moved to 0, and keeps its trust.
@@ -711,9 +715,9 @@ mod tests {
         assert_ne!(with_ours, user);
         assert_eq!(uninstalled(&with_ours), user);
         assert_eq!(uninstalled(&installed("", &req(None))), "");
-        // Someone else's `mesh` server stays.
-        let theirs = "[mcp_servers.mesh]\ncommand = \"/bin/meshy\"\n\n\
-            [mcp_servers.mesh-ext]\ncommand = \"/bin/meshy\"\n";
+        // Someone else's `teletap` server stays.
+        let theirs = "[mcp_servers.teletap]\ncommand = \"/bin/meshy\"\n\n\
+            [mcp_servers.teletap-ext]\ncommand = \"/bin/meshy\"\n";
         assert_eq!(uninstalled(theirs), theirs);
         let installed = installed(theirs, &req(None));
         assert!(installed.contains("args = [\"mcp\", \"--ext\"]"));

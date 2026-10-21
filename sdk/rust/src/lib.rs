@@ -1,5 +1,5 @@
-//! The Rust SDK for mesh extensions: the events an extension's `handle`
-//! export gets, and the host API calls it makes through `mesh_call`
+//! The Rust SDK for teletap extensions: the events an extension's `handle`
+//! export gets, and the host API calls it makes through `teletap_call`
 //! (host API 1.3, `docs/extensions.md` in the mesh repo).
 //!
 //! ```ignore
@@ -7,8 +7,8 @@
 //!
 //! #[plugin_fn]
 //! pub fn handle(input: String) -> FnResult<String> {
-//!     match mesh_ext::Event::parse(&input)? {
-//!         mesh_ext::Event::Message { message } => { /* … */ }
+//!     match teletap_ext::Event::parse(&input)? {
+//!         teletap_ext::Event::Message { message } => { /* … */ }
 //!         _ => {}
 //!     }
 //!     Ok(String::new())
@@ -25,7 +25,7 @@ use serde_json::{Value, json};
 
 #[host_fn]
 extern "ExtismHost" {
-    fn mesh_call(input: String) -> String;
+    fn teletap_call(input: String) -> String;
 }
 
 /// The host API version this SDK speaks.
@@ -45,8 +45,8 @@ pub enum Event {
     },
     Install(InstallRequest),
     Uninstall(InstallRequest),
-    /// Providers (1.3): the agent runs once, in a cloud agent's run (`mesh
-    /// run --token`), with mesh's tools and nothing written outside `dir`
+    /// Providers (1.3): the agent runs once, in a cloud agent's run (`teletap
+    /// run --token`), with teletap's tools and nothing written outside `dir`
     /// (the door's `{run_dir}/`, its only paths then; no commands). Answer
     /// a [`LaunchResult`].
     Launch(LaunchRequest),
@@ -68,7 +68,7 @@ pub enum Event {
         #[serde(default)]
         deleted: bool,
     },
-    /// Desktop pages (1.2): a `ui/` page called `mesh.call(data)`. The
+    /// Desktop pages (1.2): a `ui/` page called `teletap.call(data)`. The
     /// answer (any JSON) goes back to the page. `message`: a card's message.
     Ui {
         page: String,
@@ -128,8 +128,8 @@ impl Event {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct InstallRequest {
     pub config_dir: Option<String>,
-    pub mesh_bin: String,
-    pub mesh_home: Option<String>,
+    pub teletap_bin: String,
+    pub teletap_home: Option<String>,
     pub home: String,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
@@ -140,9 +140,9 @@ pub struct LaunchRequest {
     /// The run's folder for this agent, kept between runs of the same
     /// conversation.
     pub dir: String,
-    pub mesh_bin: String,
-    /// The run's device folder (`MESH_HOME`).
-    pub mesh_home: String,
+    pub teletap_bin: String,
+    /// The run's device folder (`TELETAP_HOME`).
+    pub teletap_home: String,
 }
 
 impl LaunchRequest {
@@ -150,8 +150,8 @@ impl LaunchRequest {
     pub fn as_install(&self) -> InstallRequest {
         InstallRequest {
             config_dir: Some(self.dir.clone()),
-            mesh_bin: self.mesh_bin.clone(),
-            mesh_home: Some(self.mesh_home.clone()),
+            teletap_bin: self.teletap_bin.clone(),
+            teletap_home: Some(self.teletap_home.clone()),
             home: String::new(),
             env: BTreeMap::new(),
         }
@@ -162,7 +162,7 @@ impl LaunchRequest {
 pub struct LaunchResult {
     /// Put before the person's arguments.
     pub args: Vec<String>,
-    /// Why the agent can't have mesh's tools this run: it runs without.
+    /// Why the agent can't have teletap's tools this run: it runs without.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -178,7 +178,7 @@ pub struct InstallResult {
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct HookParsed {
     /// `start`, `prompt`, `step`, `stop`, `idle`, `blocked`, `end`; None:
-    /// not a hook mesh acts on.
+    /// not a hook teletap acts on.
     pub kind: Option<String>,
     pub session_id: Option<String>,
     pub key: Option<String>,
@@ -197,7 +197,7 @@ pub struct HookRendered {
     pub stdout: String,
 }
 
-/// A host API call that failed: `code` is mesh's error code (`refused`, …).
+/// A host API call that failed: `code` is teletap's error code (`refused`, …).
 #[derive(Debug, Clone)]
 pub struct HostError {
     pub code: String,
@@ -219,7 +219,7 @@ pub fn call<R: DeserializeOwned>(method: &str, params: Value) -> Result<R, HostE
         message,
     };
     let input = json!({ "method": method, "params": params }).to_string();
-    let out = unsafe { mesh_call(input) }.map_err(|e| fail(e.to_string()))?;
+    let out = unsafe { teletap_call(input) }.map_err(|e| fail(e.to_string()))?;
     let reply: Value = serde_json::from_str(&out).map_err(|e| fail(e.to_string()))?;
     if let Some(e) = reply.get("error") {
         return Err(HostError {
@@ -231,7 +231,7 @@ pub fn call<R: DeserializeOwned>(method: &str, params: Value) -> Result<R, HostE
         .map_err(|e| fail(e.to_string()))
 }
 
-/// A line in meshd's log.
+/// A line in teletapd's log.
 pub fn log(text: &str) {
     let _: Result<Value, _> = call("log", json!({ "text": text }));
 }
@@ -291,7 +291,7 @@ pub mod door {
 /// The org store (1.2; org extensions with the `store` permission): keys
 /// `org/<k>` (every member reads, admins write), `person/<handle>/<k>`
 /// (every member reads, that person writes) and `private/<handle>/<k>`
-/// (that person only). mesh-control enforces the scopes.
+/// (that person only). teletap-control enforces the scopes.
 pub mod store {
     use serde::Deserialize;
     use serde_json::{Value, json};

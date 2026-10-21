@@ -1,5 +1,5 @@
 //! For providers: an agent's JSON config edited through the door the way
-//! mesh's own installer did it. Only our entries change; everything else
+//! teletap's own installer did it. Only our entries change; everything else
 //! keeps its place.
 
 use anyhow::{Context, Result, bail};
@@ -19,20 +19,20 @@ pub fn shell_quote(s: &str) -> String {
     }
 }
 
-/// `[MESH_HOME=… ]<mesh> hook <agent> <event>`, run by the agent's shell.
+/// `[TELETAP_HOME=… ]<mesh> hook <agent> <event>`, run by the agent's shell.
 pub fn hook_command(req: &InstallRequest, agent: &str, event: &str) -> String {
     let mut cmd = String::new();
-    if let Some(home) = &req.mesh_home {
-        cmd.push_str(&format!("MESH_HOME={} ", shell_quote(home)));
+    if let Some(home) = &req.teletap_home {
+        cmd.push_str(&format!("TELETAP_HOME={} ", shell_quote(home)));
     }
     cmd.push_str(&format!(
         "{} hook {agent} {event}",
-        shell_quote(&req.mesh_bin)
+        shell_quote(&req.teletap_bin)
     ));
     cmd
 }
 
-/// True for a hook command mesh wrote (any mesh path or home).
+/// True for a hook command teletap wrote (any mesh path or home).
 pub fn is_our_hook(command: &str, agent: &str) -> bool {
     let words: Vec<String> = command
         .split_whitespace()
@@ -40,16 +40,16 @@ pub fn is_our_hook(command: &str, agent: &str) -> bool {
         .collect();
     words.windows(3).any(|w| {
         let bin = w[0].rsplit('/').next().unwrap_or("");
-        bin == "mesh" && w[1] == "hook" && w[2] == agent
+        bin == "teletap" && w[1] == "hook" && w[2] == agent
     })
 }
 
 /// Our MCP servers: (name, args after the mesh binary, tools run without
-/// asking). `mesh-ext` serves the tools mesh extensions contribute; those
+/// asking). `teletap-ext` serves the tools teletap extensions contribute; those
 /// are asked about on first use.
 pub const MCP_SERVERS: &[(&str, &[&str], bool)] = &[
-    ("mesh", &["mcp"], true),
-    ("mesh-ext", &["mcp", "--ext"], false),
+    ("teletap", &["mcp"], true),
+    ("teletap-ext", &["mcp", "--ext"], false),
 ];
 
 /// True when an MCP server entry runs the mesh binary.
@@ -59,23 +59,23 @@ pub fn is_our_mcp(entry: &Value) -> bool {
         .and_then(Value::as_str)
         .and_then(|c| c.rsplit('/').next())
         .unwrap_or("");
-    bin == "mesh"
+    bin == "teletap"
 }
 
-/// An MCP server entry running `mesh <args>`, for JSON configs.
+/// An MCP server entry running `teletap <args>`, for JSON configs.
 pub fn mcp_entry(req: &InstallRequest, args: &[&str], extra: &[(&str, Value)]) -> Value {
     let mut m = Map::new();
     for (k, v) in extra.iter().filter(|(k, _)| *k == "type") {
         m.insert(k.to_string(), v.clone());
     }
-    m.insert("command".into(), Value::String(req.mesh_bin.clone()));
+    m.insert("command".into(), Value::String(req.teletap_bin.clone()));
     m.insert(
         "args".into(),
         Value::Array(args.iter().map(|a| Value::String(a.to_string())).collect()),
     );
-    if let Some(home) = &req.mesh_home {
+    if let Some(home) = &req.teletap_home {
         let mut env = Map::new();
-        env.insert("MESH_HOME".into(), Value::String(home.clone()));
+        env.insert("TELETAP_HOME".into(), Value::String(home.clone()));
         m.insert("env".into(), Value::Object(env));
     }
     for (k, v) in extra.iter().filter(|(k, _)| *k != "type") {
@@ -186,19 +186,6 @@ fn remove_from_groups(groups: &mut Value, agent: &str) {
             .and_then(Value::as_array)
             .is_none_or(|h| !h.is_empty())
     });
-}
-
-/// Removes our handlers from `events` only; drops emptied groups and events.
-pub fn remove_old_hooks(hooks: &mut Map<String, Value>, events: &[&str], agent: &str) {
-    for event in events {
-        let Some(groups) = hooks.get_mut(*event) else {
-            continue;
-        };
-        remove_from_groups(groups, agent);
-        if groups.as_array().is_some_and(Vec::is_empty) {
-            hooks.remove(*event);
-        }
-    }
 }
 
 /// Removes our handlers from every event; drops emptied groups/events.

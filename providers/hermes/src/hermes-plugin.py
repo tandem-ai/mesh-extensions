@@ -1,10 +1,10 @@
-"""mesh for Hermes: answers from your team come back into this session.
+"""teletap for Hermes: answers from your team come back into this session.
 
-Written by `mesh install hermes`; `mesh uninstall hermes` removes it.
-Calls: mesh hook hermes <event>
+Written by `teletap install hermes`; `teletap uninstall hermes` removes it.
+Calls: teletap hook hermes <event>
 
-The plugin serves this session's inbox (a Unix socket under $MESH_HOME/inbox)
-and reports it to meshd through `mesh hook hermes start`. meshd posts answers
+The plugin serves this session's inbox (a Unix socket under $TELETAP_HOME/inbox)
+and reports it to teletapd through `teletap hook hermes start`. teletapd posts answers
 there. The classic CLI takes a message injected mid-turn as an interrupt, so
 answers are held while Hermes works or waits on you, and go in once it is at
 rest; anything still waiting when a turn starts goes in as turn context.
@@ -18,34 +18,34 @@ import subprocess
 import threading
 from pathlib import Path
 
-MESH = "__MESH_BIN__"
-MESH_HOME_PIN = "__MESH_HOME__"
+TELETAP = "__TELETAP_BIN__"
+TELETAP_HOME_PIN = "__TELETAP_HOME__"
 
 
 def register(ctx):
-    if os.environ.get("MESH_SESSION") == "none":
+    if os.environ.get("TELETAP_SESSION") == "none":
         return
     # Everything Hermes starts (terminal tool, hooks) belongs to this session.
-    if MESH_HOME_PIN:
-        os.environ["MESH_HOME"] = MESH_HOME_PIN
-    # `mesh send` from the terminal tool works even if mesh isn't on the user's PATH.
-    os.environ["PATH"] = os.path.dirname(MESH) + os.pathsep + os.environ.get("PATH", "")
-    os.environ.setdefault("MESH_SESSION", f"hermes-{os.getpid()}")
-    os.environ["MESH_AGENT"] = "hermes"
-    os.environ["MESH_SESSION_PID"] = str(os.getpid())
-    home = Path(os.environ.get("MESH_HOME") or Path.home() / ".mesh")
+    if TELETAP_HOME_PIN:
+        os.environ["TELETAP_HOME"] = TELETAP_HOME_PIN
+    # `teletap send` from the terminal tool works even if teletap isn't on the user's PATH.
+    os.environ["PATH"] = os.path.dirname(TELETAP) + os.pathsep + os.environ.get("PATH", "")
+    os.environ.setdefault("TELETAP_SESSION", f"hermes-{os.getpid()}")
+    os.environ["TELETAP_AGENT"] = "hermes"
+    os.environ["TELETAP_SESSION_PID"] = str(os.getpid())
+    home = Path(os.environ.get("TELETAP_HOME") or Path.home() / ".teletap")
     sock = home / "inbox" / f"hermes-{os.getpid()}.sock"
     token = secrets.token_hex(16)
     lock = threading.Lock()
     state = {"busy": False, "asking": 0, "held": [], "intro": "", "session_key": None, "server": None}
 
     def hook(event, payload=None):
-        """One `mesh hook` call; what it printed ("" on any failure)."""
-        env = dict(os.environ, MESH_AGENT_INBOX=str(sock), MESH_AGENT_INBOX_TOKEN=token)
+        """One `teletap hook` call; what it printed ("" on any failure)."""
+        env = dict(os.environ, TELETAP_AGENT_INBOX=str(sock), TELETAP_AGENT_INBOX_TOKEN=token)
         body = json.dumps({"hook_event_name": event, **(payload or {})})
         try:
             done = subprocess.run(
-                [MESH, "hook", "hermes", event],
+                [TELETAP, "hook", "hermes", event],
                 input=body, capture_output=True, text=True, env=env, timeout=10,
             )
             return done.stdout.strip()

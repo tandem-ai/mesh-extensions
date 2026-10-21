@@ -1,13 +1,13 @@
-//! `mesh/pi`: Pi on mesh, as a provider extension. It used to be
-//! `mesh-agents/src/install/pi.rs` and Pi's part of `hooks.rs` (the
-//! "unknown agent" path) in mesh itself; it writes the same file, byte for
+//! `teletap/pi`: Pi on teletap, as a provider extension. It used to be
+//! `teletap-agents/src/install/pi.rs` and Pi's part of `hooks.rs` (the
+//! "unknown agent" path) in teletap itself; it writes the same file, byte for
 //! byte.
 //!
-//! - install: an extension in `<agent dir>/extensions/mesh.ts`
+//! - install: an extension in `<agent dir>/extensions/teletap.ts`
 //!   (`PI_CODING_AGENT_DIR`, else `~/.pi/agent`). Pi loads TypeScript
 //!   extensions from there at start. Pi has no hooks of its own to
 //!   configure; the extension serves the session's inbox and runs
-//!   `mesh hook pi <event>` itself (see `pi-extension.ts`);
+//!   `teletap hook pi <event>` itself (see `pi-extension.ts`);
 //! - launch (a cloud agent's run): the same extension in the run's folder,
 //!   given to Pi with `--extension`; nothing in `~/.pi`;
 //! - hooks: which session event each call is, and what it prints (raw text).
@@ -21,16 +21,16 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 #[cfg(target_arch = "wasm32")]
 use extism_pdk::{FnResult, plugin_fn};
+use serde_json::Value;
 #[cfg(target_arch = "wasm32")]
-use mesh_ext::Event;
-use mesh_ext::{
+use teletap_ext::Event;
+use teletap_ext::{
     HookParsed, HookRendered, InstallRequest, InstallResult, LaunchRequest, LaunchResult, door,
 };
-use serde_json::Value;
 
 const TEMPLATE: &str = include_str!("pi-extension.ts");
 /// What marks the file as ours.
-const MARK: &str = "// Written by `mesh install pi`";
+const MARK: &str = "// Written by `teletap install pi`";
 
 // The export exists in the WASM build only: host-side unit tests can't link
 // Extism's imports, and test the logic below directly.
@@ -82,17 +82,17 @@ fn extension_path(req: &InstallRequest) -> String {
         .or(env)
         .map(|d| d.trim_end_matches('/').to_string())
         .unwrap_or_else(|| format!("{}/.pi/agent", req.home.trim_end_matches('/')));
-    format!("{dir}/extensions/mesh.ts")
+    format!("{dir}/extensions/teletap.ts")
 }
 
-/// The extension with this install's `mesh` binary and `MESH_HOME`.
+/// The extension with this install's `teletap` binary and `TELETAP_HOME`.
 fn extension(req: &InstallRequest) -> String {
     let lit = |s: &str| serde_json::to_string(s).unwrap();
     TEMPLATE
-        .replace("\"__MESH_BIN__\"", &lit(&req.mesh_bin))
+        .replace("\"__TELETAP_BIN__\"", &lit(&req.teletap_bin))
         .replace(
-            "\"__MESH_HOME__\"",
-            &lit(req.mesh_home.as_deref().unwrap_or_default()),
+            "\"__TELETAP_HOME__\"",
+            &lit(req.teletap_home.as_deref().unwrap_or_default()),
         )
 }
 
@@ -136,8 +136,8 @@ fn uninstall(req: &InstallRequest) -> Result<InstallResult> {
 
 // ---------------------------------------------------------------- hooks
 
-/// The event word (`mesh hook pi <event>`) → session event. The extension
-/// sends our short names; the rest is the table mesh's own hook took.
+/// The event word (`teletap hook pi <event>`) → session event. The extension
+/// sends our short names; the rest is the table teletap's own hook took.
 fn parse_event(name: &str) -> Option<&'static str> {
     let n: String = name
         .chars()
@@ -157,7 +157,7 @@ fn parse_event(name: &str) -> Option<&'static str> {
 }
 
 /// The extension's hook call: `{hook_event_name, cwd?}` on stdin. Its inbox
-/// (`MESH_AGENT_INBOX`) reaches meshd from the mesh CLI, not from here.
+/// (`TELETAP_AGENT_INBOX`) reaches teletapd from the mesh CLI, not from here.
 pub fn hook(name: &str, payload: &Value, _env: &BTreeMap<String, String>) -> HookParsed {
     // Cursor runs other agents' hooks with its own payload: only Cursor's
     // own hooks speak there.
@@ -202,7 +202,7 @@ mod tests {
     fn req(dir: Option<&str>, env: Option<&str>) -> InstallRequest {
         InstallRequest {
             config_dir: dir.map(str::to_string),
-            mesh_bin: "/Users/p/.local/bin/mesh".into(),
+            teletap_bin: "/Users/p/.local/bin/teletap".into(),
             home: "/Users/p".into(),
             env: env
                 .map(|e| BTreeMap::from([("PI_CODING_AGENT_DIR".to_string(), e.to_string())]))
@@ -215,52 +215,52 @@ mod tests {
     fn extension_path_follows_pi() {
         assert_eq!(
             extension_path(&req(None, None)),
-            "/Users/p/.pi/agent/extensions/mesh.ts"
+            "/Users/p/.pi/agent/extensions/teletap.ts"
         );
         assert_eq!(
             extension_path(&req(None, Some("/x/"))),
-            "/x/extensions/mesh.ts"
+            "/x/extensions/teletap.ts"
         );
         assert_eq!(
             extension_path(&req(None, Some(""))),
-            "/Users/p/.pi/agent/extensions/mesh.ts"
+            "/Users/p/.pi/agent/extensions/teletap.ts"
         );
         assert_eq!(
             extension_path(&req(Some("/tmp/agent"), Some("/x"))),
-            "/tmp/agent/extensions/mesh.ts"
+            "/tmp/agent/extensions/teletap.ts"
         );
     }
 
     #[test]
     fn a_launch_loads_the_extension_from_the_run() {
         let req = LaunchRequest {
-            dir: "/w/.mesh/pi".into(),
-            mesh_bin: "/usr/bin/mesh".into(),
-            mesh_home: "/tmp/mesh-x".into(),
+            dir: "/w/.teletap/pi".into(),
+            teletap_bin: "/usr/bin/teletap".into(),
+            teletap_home: "/tmp/teletap-x".into(),
         };
         let install = req.as_install();
         let path = extension_path(&install);
-        assert_eq!(path, "/w/.mesh/pi/extensions/mesh.ts");
+        assert_eq!(path, "/w/.teletap/pi/extensions/teletap.ts");
         assert_eq!(
             launch_args(&path),
-            ["--extension", "/w/.mesh/pi/extensions/mesh.ts"]
+            ["--extension", "/w/.teletap/pi/extensions/teletap.ts"]
         );
         let text = extension(&install);
-        assert!(text.contains(r#"const MESH = "/usr/bin/mesh";"#));
-        assert!(text.contains(r#"const MESH_HOME_PIN = "/tmp/mesh-x";"#));
+        assert!(text.contains(r#"const TELETAP = "/usr/bin/teletap";"#));
+        assert!(text.contains(r#"const TELETAP_HOME_PIN = "/tmp/teletap-x";"#));
     }
 
     #[test]
     fn extension_fills_the_placeholders() {
         let mut r = req(None, None);
-        r.mesh_home = Some("/tmp/my mesh".into());
+        r.teletap_home = Some("/tmp/my mesh".into());
         let text = extension(&r);
-        assert!(!text.contains("__MESH_"), "placeholders filled");
+        assert!(!text.contains("__TELETAP_"), "placeholders filled");
         assert!(!text.contains("tool_call"), "no pre-tool handler");
         assert!(text.contains(MARK));
-        assert!(text.contains(r#"const MESH = "/Users/p/.local/bin/mesh";"#));
-        assert!(text.contains(r#"const MESH_HOME_PIN = "/tmp/my mesh";"#));
-        assert!(extension(&req(None, None)).contains(r#"const MESH_HOME_PIN = "";"#));
+        assert!(text.contains(r#"const TELETAP = "/Users/p/.local/bin/teletap";"#));
+        assert!(text.contains(r#"const TELETAP_HOME_PIN = "/tmp/my mesh";"#));
+        assert!(extension(&req(None, None)).contains(r#"const TELETAP_HOME_PIN = "";"#));
     }
 
     #[test]

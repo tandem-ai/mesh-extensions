@@ -1,12 +1,12 @@
-//! `mesh/cursor`: Cursor (IDE and CLI) on mesh, as a provider extension. It
-//! used to be `mesh-agents/src/install/cursor.rs` and the Cursor parts of
-//! `hooks.rs` in mesh itself; it writes the same files, byte for byte.
+//! `teletap/cursor`: Cursor (IDE and CLI) on teletap, as a provider extension. It
+//! used to be `teletap-agents/src/install/cursor.rs` and the Cursor parts of
+//! `hooks.rs` in teletap itself; it writes the same files, byte for byte.
 //!
-//! - install: hooks in `<config dir>/hooks.json` and the MCP servers `mesh`
-//!   and `mesh-ext` (extension tools) in `<config dir>/mcp.json` (`~/.cursor`
+//! - install: hooks in `<config dir>/hooks.json` and the MCP servers `teletap`
+//!   and `teletap-ext` (extension tools) in `<config dir>/mcp.json` (`~/.cursor`
 //!   by default). Both the editor and `cursor-agent` read them. The CLI's
-//!   allow list (`cli-config.json`) gets `Mcp(mesh:*)` so the agent can use
-//!   mesh's tools without asking each time; extension tools are asked about;
+//!   allow list (`cli-config.json`) gets `Mcp(teletap:*)` so the agent can use
+//!   teletap's tools without asking each time; extension tools are asked about;
 //! - hooks: which session event each Cursor hook is, and what it prints.
 //!
 //! Hooks are flat lists: `{"version": 1, "hooks": {"stop": [{command, timeout}]}}`.
@@ -22,13 +22,13 @@ use std::collections::BTreeMap;
 use anyhow::{Context, Result};
 #[cfg(target_arch = "wasm32")]
 use extism_pdk::{FnResult, plugin_fn};
-#[cfg(target_arch = "wasm32")]
-use mesh_ext::Event;
-use mesh_ext::{HookParsed, HookRendered, InstallRequest, InstallResult, config as json, door};
 use serde_json::{Value, json};
+#[cfg(target_arch = "wasm32")]
+use teletap_ext::Event;
+use teletap_ext::{HookParsed, HookRendered, InstallRequest, InstallResult, config as json, door};
 
-/// Lets the CLI use mesh's MCP tools without a prompt.
-const PERMISSION: &str = "Mcp(mesh:*)";
+/// Lets the CLI use teletap's MCP tools without a prompt.
+const PERMISSION: &str = "Mcp(teletap:*)";
 
 /// (Cursor event, our event name, timeout in seconds).
 const EVENTS: &[(&str, &str, u64)] = &[
@@ -38,10 +38,6 @@ const EVENTS: &[(&str, &str, u64)] = &[
     ("stop", "stop", 10),
     ("sessionEnd", "end", 5),
 ];
-
-/// Events older versions hooked: install drops our entry there (uninstall
-/// drops ours everywhere). `preToolUse` ran the team-rule check.
-const OLD_EVENTS: &[&str] = &["preToolUse"];
 
 // The export exists in the WASM build only: host-side unit tests can't link
 // Extism's imports, and test the logic below directly.
@@ -114,8 +110,8 @@ fn install(req: &InstallRequest) -> Result<InstallResult> {
         report.files.push(path);
     }
     report.notes.push(
-        "Cursor: hooks (sessionStart, postToolUse, stop, sessionEnd) and the `mesh` \
-         and `mesh-ext` MCP servers are set for the editor and the CLI; new chats \
+        "Cursor: hooks (sessionStart, postToolUse, stop, sessionEnd) and the `teletap` \
+         and `teletap-ext` MCP servers are set for the editor and the CLI; new chats \
          pick them up."
             .into(),
     );
@@ -172,14 +168,6 @@ fn add_hooks(root: &mut Value, req: &InstallRequest, path: &str) -> Result<()> {
             None => list.push(entry),
         }
     }
-    for event in OLD_EVENTS {
-        if let Some(list) = hooks.get_mut(*event).and_then(Value::as_array_mut) {
-            list.retain(|e| !is_ours(e));
-            if list.is_empty() {
-                hooks.remove(*event);
-            }
-        }
-    }
     Ok(())
 }
 
@@ -205,7 +193,7 @@ fn add_mcp(root: &mut Value, req: &InstallRequest) -> Result<()> {
     Ok(())
 }
 
-/// `Mcp(mesh:*)` in the CLI's `permissions.allow`.
+/// `Mcp(teletap:*)` in the CLI's `permissions.allow`.
 fn add_permission(root: &mut Value, path: &str) -> Result<()> {
     let allow = json::object_at(root, "permissions")?
         .entry("allow")
@@ -292,12 +280,12 @@ pub fn render(kind: &str, handover: Option<String>, intro: Option<String>) -> St
 mod tests {
     use super::*;
 
-    const CMD: &str = "/usr/local/bin/mesh hook";
+    const CMD: &str = "/usr/local/bin/teletap hook";
     const PATH: &str = "/c/hooks.json";
 
     fn opts() -> InstallRequest {
         InstallRequest {
-            mesh_bin: "/usr/local/bin/mesh".into(),
+            teletap_bin: "/usr/local/bin/teletap".into(),
             home: "/Users/p".into(),
             ..InstallRequest::default()
         }
@@ -330,8 +318,8 @@ mod tests {
             m,
             json!({"mcpServers": {
                 "gh": {"command": "gh-mcp"},
-                "mesh": {"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp"]},
-                "mesh-ext": {"type": "stdio", "command": "/usr/local/bin/mesh", "args": ["mcp", "--ext"]},
+                "teletap": {"type": "stdio", "command": "/usr/local/bin/teletap", "args": ["mcp"]},
+                "teletap-ext": {"type": "stdio", "command": "/usr/local/bin/teletap", "args": ["mcp", "--ext"]},
             }})
         );
         let once = m.clone();
@@ -343,9 +331,9 @@ mod tests {
         let mut c = json!({});
         add_permission(&mut c, "/c/cli-config.json").unwrap();
         add_permission(&mut c, "/c/cli-config.json").unwrap();
-        // Not `Mcp(mesh-ext:*)`: extension tools are asked about.
-        assert_eq!(c["permissions"]["allow"], json!(["Mcp(mesh:*)"]));
-        assert!(!c.to_string().contains("mesh-ext"));
+        // Not `Mcp(teletap-ext:*)`: extension tools are asked about.
+        assert_eq!(c["permissions"]["allow"], json!(["Mcp(teletap:*)"]));
+        assert!(!c.to_string().contains("teletap-ext"));
         remove_permission(&mut c);
         assert_eq!(c, json!({"permissions": {"allow": []}}));
     }
@@ -364,24 +352,6 @@ mod tests {
         let mut bad = json!({"hooks": {"stop": {}}});
         let e = add_hooks(&mut bad, &opts(), PATH).unwrap_err();
         assert_eq!(e.to_string(), "hooks.stop in /c/hooks.json is not a list");
-    }
-
-    /// An older mesh hooked `preToolUse` (team rules).
-    #[test]
-    fn drops_the_old_pre_tool_hook() {
-        let ours = json!({"command": format!("{CMD} cursor tool"), "timeout": 10});
-        let theirs = json!({"command": "/opt/guard.sh"});
-        let old = json!({"version": 1, "hooks": {"preToolUse": [ours, theirs]}});
-        let mut h = old.clone();
-        add_hooks(&mut h, &opts(), PATH).unwrap();
-        assert_eq!(h["hooks"]["preToolUse"], json!([theirs]));
-        // Only ours: the event goes.
-        let mut h = json!({"version": 1, "hooks": {"preToolUse": [ours]}});
-        add_hooks(&mut h, &opts(), PATH).unwrap();
-        assert!(h["hooks"].get("preToolUse").is_none());
-        let mut h = old.clone();
-        remove_hooks(&mut h);
-        assert_eq!(h, json!({"version": 1, "hooks": {"preToolUse": [theirs]}}));
     }
 
     #[test]

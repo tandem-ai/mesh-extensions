@@ -1,4 +1,4 @@
-id = "mesh/pulse"
+id = "teletap/pulse"
 version = "0.1.0"
 api = "1.2"
 kind = "wasm"

@@ -17,7 +17,7 @@ license = "Apache-2.0"
 publish = false
 
 [workspace.dependencies]
-mesh-ext = { path = "sdk/rust" }
+teletap-ext = { path = "sdk/rust" }
 extism-pdk = "1.4"
 serde = { version = "1", features = ["derive"] }
 # Keys keep their order, as agents' config files have them.

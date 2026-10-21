@@ -1,9 +1,9 @@
-id = "mesh/gemini"
+id = "teletap/gemini"
 version = "0.2.0"
 api = "1.1"
 kind = "provider"
 scope = "personal"
-description = "Connects Gemini CLI to mesh: hooks and the mesh and mesh-ext MCP servers."
+description = "Connects Gemini CLI to teletap: hooks and the teletap and teletap-ext MCP servers."
 
 [provider]
 agent = "gemini"
